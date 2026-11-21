@@ -195,6 +195,20 @@ export default function Marketplace({ initialType }) {
       .replace(/^v/, "")
       .split(".")
       .map((n) => parseInt(n, 10) || 0);
+
+    // If minRequired targets StrawVerse versions (major >= 10) and current app is Iconmedia (major < 10)
+    // Iconmedia v1.0.0 is based on and compatible with StrawVerse v12.0.2 capabilities.
+    if (req[0] >= 10 && curr[0] < 10) {
+      const iconmediaEquivalent = [12, 0, 2];
+      for (let i = 0; i < Math.max(iconmediaEquivalent.length, req.length); i++) {
+        const c = iconmediaEquivalent[i] || 0;
+        const r = req[i] || 0;
+        if (c < r) return true;
+        if (c > r) return false;
+      }
+      return false;
+    }
+
     for (let i = 0; i < Math.max(curr.length, req.length); i++) {
       const c = curr[i] || 0;
       const r = req[i] || 0;
@@ -369,7 +383,7 @@ export default function Marketplace({ initialType }) {
     ) {
       swalError(
         "App Update Required",
-        `This extension requires StrawVerse v${provider.MinAppVersion} or higher. You are currently on v${appVersion}. Please update your app to install this extension.`,
+        `This extension requires Iconmedia v${provider.MinAppVersion} or higher. You are currently on v${appVersion}. Please update your app to install this extension.`,
       );
       return;
     }
@@ -750,7 +764,7 @@ export default function Marketplace({ initialType }) {
                           borderColor: "rgba(245, 158, 11, 0.4)",
                           color: "#fbbf24",
                         }}
-                        title={`Requires StrawVerse v${provider.MinAppVersion} or higher (current: v${appVersion})`}
+                        title={`Requires Iconmedia v${provider.MinAppVersion} or higher (current: v${appVersion})`}
                       >
                         <ShieldAlert size={14} />
                         <span>v{provider.MinAppVersion}+ Required</span>
@@ -783,7 +797,7 @@ export default function Marketplace({ initialType }) {
                                 disabled
                                 className="btn-update"
                                 style={{ opacity: 0.5, cursor: "not-allowed" }}
-                                title={`Update requires StrawVerse v${provider.MinAppVersion}`}
+                                title={`Update requires Iconmedia v${provider.MinAppVersion}`}
                               >
                                 v{provider.MinAppVersion}+ Required
                               </button>

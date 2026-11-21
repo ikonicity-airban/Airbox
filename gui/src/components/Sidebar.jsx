@@ -48,7 +48,7 @@ export default function Sidebar({
             className="sidebar-logo-img"
           />
           {!isCollapsed && (
-            <span className="sidebar-logo-text">StrawVerse</span>
+            <span className="sidebar-logo-text">Iconmedia</span>
           )}
         </div>
         <button

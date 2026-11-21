@@ -1193,6 +1193,20 @@ function isVersionBelow(curr, req) {
     .replace(/^v/, "")
     .split(".")
     .map((n) => parseInt(n, 10) || 0);
+
+  // If requirement targets StrawVerse (major >= 10) and current app is Iconmedia (major < 10)
+  // Iconmedia v1.0.0 is built on and compatible with StrawVerse v12.0.2 capabilities.
+  if (rParts[0] >= 10 && cParts[0] < 10) {
+    const iconmediaEquivalent = [12, 0, 2];
+    for (let i = 0; i < Math.max(iconmediaEquivalent.length, rParts.length); i++) {
+      const c = iconmediaEquivalent[i] || 0;
+      const r = rParts[i] || 0;
+      if (c < r) return true;
+      if (c > r) return false;
+    }
+    return false;
+  }
+
   for (let i = 0; i < Math.max(cParts.length, rParts.length); i++) {
     const c = cParts[i] || 0;
     const r = rParts[i] || 0;
@@ -1712,7 +1726,7 @@ async function HandleExtensions(
           return {
             type: "error",
             title: "App Update Required",
-            message: `This extension requires StrawVerse v${MinAppVersion} or higher (current: v${currentAppVer}). Please update your app to install.`,
+            message: `This extension requires Iconmedia v${MinAppVersion} or higher (current: v${currentAppVer}). Please update your app to install.`,
           };
         }
       }
