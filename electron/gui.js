@@ -355,8 +355,8 @@ const createWindow = () => {
     icon: path.join(
       __dirname,
       process.platform === "win32"
-        ? "./assets/luffy.ico"
-        : "./assets/luffy.png",
+        ? "./assets/iconmedia.ico"
+        : "./assets/iconmedia.png",
     ),
     minWidth: 1000,
     minHeight: 750,

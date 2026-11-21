@@ -1,7 +1,8 @@
 {
-  "name": "strawverse",
-  "version": "12.1.0",
-  "description": "Download anime in batches & its fast :3",
+  "name": "iconmedia",
+  "version": "1.0.0",
+  "productName": "Iconmedia",
+  "description": "Iconmedia - Universal Media Streaming and Batch Downloader",
   "main": "gui.js",
   "scripts": {
     "start": "electron .",
@@ -22,12 +23,12 @@
     "url": "https://github.com/TheYogMehta/StrawVerse.git"
   },
   "build": {
-    "appId": "com.animebatchdownloader.gui",
+    "appId": "com.iconmedia.app",
     "protocols": [
       {
-        "name": "strawverse-protocols",
+        "name": "iconmedia-protocols",
         "schemes": [
-          "strawverse"
+          "iconmedia"
         ]
       }
     ],
@@ -57,13 +58,13 @@
           ]
         }
       ],
-      "artifactName": "StrawVerse.Setup.${version}.exe",
-      "icon": "assets/luffy.ico"
+      "artifactName": "Iconmedia.Setup.${version}.exe",
+      "icon": "assets/iconmedia.ico"
     },
     "publish": {
       "provider": "github",
-      "owner": "TheYogMehta",
-      "repo": "StrawVerse",
+      "owner": "ikonicity-airban",
+      "repo": "Iconmedia",
       "private": false
     },
     "nsis": {

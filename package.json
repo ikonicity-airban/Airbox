@@ -1,8 +1,8 @@
 {
-  "name": "strawverse-root",
-  "version": "12.1.0",
+  "name": "iconmedia",
+  "version": "1.0.0",
   "private": true,
-  "description": "StrawVerse - Download anime & manga in batches, unified across Desktop & Android",
+  "description": "Iconmedia - Stream & Download Movies, Series & Anime with full season organization",
   "scripts": {
     "dev:gui": "npm run dev --prefix gui",
     "dev:desktop": "cd electron && npm start",
