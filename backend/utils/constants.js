@@ -495,17 +495,29 @@ function formatMovieFilename(
     // Multi-episode series under Movies & Series
     const num = parseFloat(epNum) || 1;
     const paddedEp = String(num).padStart(2, "0");
-    const paddedSeason = String(season || 1).padStart(2, "0");
+    const parsedSeason = parseInt(season, 10);
+    const seasonNum =
+      Number.isInteger(parsedSeason) && parsedSeason >= 0 ? parsedSeason : 1;
+    const paddedSeason = String(seasonNum).padStart(2, "0");
 
     if (namingScheme === "title_s01e01" || namingScheme === "plex_jellyfin") {
       baseName = `${cleanTitle} - S${paddedSeason}E${paddedEp}${qStr}`;
     } else if (namingScheme === "title_ep") {
-      baseName = `${cleanTitle} - Episode ${num}`;
+      baseName =
+        seasonNum > 1
+          ? `${cleanTitle} - S${paddedSeason} Episode ${num}`
+          : `${cleanTitle} - Episode ${num}`;
     } else if (namingScheme === "title_only") {
-      baseName = `${cleanTitle} - ${paddedEp}`;
+      baseName =
+        seasonNum > 1
+          ? `${cleanTitle} - S${paddedSeason}E${paddedEp}`
+          : `${cleanTitle} - ${paddedEp}`;
     } else {
-      // default: "Title - 01"
-      baseName = `${cleanTitle} - ${paddedEp}`;
+      // default: "Title - 01" for season 1; for multi-season shows, include Sxx to prevent file collisions
+      baseName =
+        seasonNum > 1
+          ? `${cleanTitle} - S${paddedSeason}E${paddedEp}`
+          : `${cleanTitle} - ${paddedEp}`;
     }
   }
 

@@ -131,6 +131,38 @@ test("single movie naming conversion and formatting", () => {
     "Breaking Bad - Episode 2.mp4",
   );
 
+  // Multi-season prevention tests: season > 1 must include season prefix across all schemes
+  assert.strictEqual(
+    formatMovieFilename({
+      title: "Breaking Bad",
+      isSingleMovie: false,
+      epNum: 1,
+      season: 2,
+      namingScheme: "title_s01e01",
+    }),
+    "Breaking Bad - S02E01.mp4",
+  );
+  assert.strictEqual(
+    formatMovieFilename({
+      title: "Breaking Bad",
+      isSingleMovie: false,
+      epNum: 1,
+      season: 7,
+      namingScheme: "default",
+    }),
+    "Breaking Bad - S07E01.mp4",
+  );
+  assert.strictEqual(
+    formatMovieFilename({
+      title: "Breaking Bad",
+      isSingleMovie: false,
+      epNum: 4,
+      season: 3,
+      namingScheme: "title_ep",
+    }),
+    "Breaking Bad - S03 Episode 4.mp4",
+  );
+
   // formatEpisodeFilename delegates appropriately for movies
   assert.strictEqual(
     formatEpisodeFilename({

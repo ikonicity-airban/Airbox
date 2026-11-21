@@ -1244,7 +1244,9 @@ export default function SettingsView({
   }, [
     animeProvider,
     quality,
+    minDownloadSpeed,
     mangaProvider,
+    moviesProvider,
     autoLoadNextChapter,
     pagination,
     malStatus,
@@ -1262,9 +1264,11 @@ export default function SettingsView({
     downloadNotification,
     animeDownloadLocation,
     mangaDownloadLocation,
+    moviesDownloadLocation,
     mangaAutoScrollSpeed,
     animeNamingScheme,
     mangaNamingScheme,
+    moviesNamingScheme,
     jellyfinCompatibility,
     externalLogEnabled,
     maxLogFiles,
@@ -2615,7 +2619,12 @@ export default function SettingsView({
                 >
                   <Dropdown
                     value={moviesNamingScheme}
-                    onChange={setMoviesNamingScheme}
+                    onChange={(val) => {
+                      setMoviesNamingScheme(val);
+                      if (val === "title_s01e01" && !mediaServerNaming) {
+                        setMediaServerNaming(true);
+                      }
+                    }}
                     options={[
                       {
                         value: "default",

@@ -870,15 +870,26 @@ async function downloadep(
       !String(AnimeEpId).match(/tv:[^:]+:(\d+):\d+/i) &&
       !String(AnimeEpId).match(/[Ss]\d+[Ee]\d+/i));
 
-  if (liveSettings.mediaServerNaming === true && !isSingleMovie) {
+  const taskSeason =
+    Videoconfig?.season !== undefined && Videoconfig?.season !== null
+      ? parseInt(Videoconfig.season, 10)
+      : NaN;
+  const hasValidSeason = Number.isInteger(taskSeason) && taskSeason > 0;
+
+  if (
+    !isSingleMovie &&
+    (hasValidSeason ||
+      liveSettings.mediaServerNaming === true ||
+      liveSettings.moviesNamingScheme === "title_s01e01" ||
+      liveSettings.moviesNamingScheme === "plex_jellyfin")
+  ) {
     // Season and show folder picked on the show's page (default: S1, title)
     const show = liveSettings.mediaServerShows?.[String(animeId)] || {};
-    const taskSeason =
-      Videoconfig?.season !== undefined && Videoconfig?.season !== null
-        ? parseInt(Videoconfig.season, 10)
-        : parseInt(show.season, 10);
-    const resolvedSeason =
-      Number.isInteger(taskSeason) && taskSeason >= 0 ? taskSeason : 1;
+    const resolvedSeason = hasValidSeason
+      ? taskSeason
+      : Number.isInteger(parseInt(show.season, 10)) && parseInt(show.season, 10) > 0
+        ? parseInt(show.season, 10)
+        : 1;
     directoryPath = await mediaServerDir(
       String(show.series || "").trim() || Title,
       resolvedSeason,
@@ -894,8 +905,17 @@ async function downloadep(
         );
       } catch (_) {}
     }
-  } else if (isMovie) {
+  } else if (isMovie && isSingleMovie) {
     directoryPath = await MovieDir(Title, dlLoc, animeId || AnimeEpId);
+  } else if (isMovie) {
+    const resolvedSeason = hasValidSeason ? taskSeason : 1;
+    directoryPath = await mediaServerDir(
+      Title,
+      resolvedSeason,
+      dlLoc,
+      animeId || AnimeEpId,
+      "MoviesSeries",
+    );
   } else {
     directoryPath = await directoryMaker(
       Title,
@@ -1415,8 +1435,10 @@ async function downloadEpisodeByQuality(
         epNum: episodeNumber,
         season: config?.season || 1,
         namingScheme:
-          currentSettings.mediaServerNaming === true
-            ? "plex_jellyfin"
+          currentSettings.mediaServerNaming === true || !isSingleMovie
+            ? movieScheme === "default"
+              ? "title_s01e01"
+              : movieScheme
             : movieScheme,
         quality:
           currentSettings.mediaServerNaming === true ? dlQuality : null,
