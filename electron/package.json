@@ -17,11 +17,11 @@
     "release": "bash release.sh",
     "start:prod": "cross-env NODE_ENV=production electron .",
     "postinstall": "electron-builder install-app-deps && node scripts/download-binaries.js",
-    "package:win": "electron-builder --win"
+    "package:win": "npm run build --prefix ../gui && electron-builder --win"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheYogMehta/StrawVerse.git"
+    "url": "https://github.com/ikonicity-airban/Iconmedia.git"
   },
   "build": {
     "appId": "com.iconmedia.app",
@@ -87,10 +87,10 @@
         }
       ],
       "category": "Utility",
-      "icon": "assets/luffy.png",
+      "icon": "assets/iconmedia.png",
       "desktop": {
         "entry": {
-          "MimeType": "x-scheme-handler/strawverse;"
+          "MimeType": "x-scheme-handler/iconmedia;"
         }
       }
     },
@@ -110,9 +110,9 @@
         }
       ],
       "category": "public.app-category.entertainment",
-      "icon": "assets/luffy.icns",
+      "icon": "assets/iconmedia.png",
       "identity": null,
-      "artifactName": "StrawVerse-${version}-mac-arm64.${ext}"
+      "artifactName": "Iconmedia-${version}-mac-arm64.${ext}"
     },
     "dmg": {
       "contents": [

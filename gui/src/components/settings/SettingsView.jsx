@@ -277,7 +277,7 @@ export default function SettingsView({
         ? animeDownloadLocation
         : mangaDownloadLocation;
     const defaultPlaceholder = isMobileApp()
-      ? `/StrawVerse/${isMovies ? "MoviesSeries" : type}`
+      ? `/Iconmedia/${isMovies ? "MoviesSeries" : type}`
       : `Downloads/${isMovies ? "MoviesSeries" : type}`;
 
     if (window.sharedStateAPI?.selectDirectory && !isMobileApp()) {
@@ -1567,7 +1567,7 @@ export default function SettingsView({
                         </div>
                         <div className="settings-row-hint">
                           Disconnect and remove MyAnimeList credentials from
-                          StrawVerse.
+                          Iconmedia.
                         </div>
                       </div>
                       <div className="settings-row-control">
@@ -2190,14 +2190,14 @@ export default function SettingsView({
                       value={animeDownloadLocation}
                       placeholder={
                         isMobileApp()
-                          ? "Default (/StrawVerse/Anime)"
+                          ? "Default (/Iconmedia/Anime)"
                           : "Default (Downloads/Anime)"
                       }
                       readOnly
                       title={
                         animeDownloadLocation ||
                         (isMobileApp()
-                          ? "Default (/StrawVerse/Anime)"
+                          ? "Default (/Iconmedia/Anime)"
                           : "Default (Downloads/Anime)")
                       }
                     />
@@ -2470,14 +2470,14 @@ export default function SettingsView({
                       value={mangaDownloadLocation}
                       placeholder={
                         isMobileApp()
-                          ? "Default (/StrawVerse/Manga)"
+                          ? "Default (/Iconmedia/Manga)"
                           : "Default (Downloads/Manga)"
                       }
                       readOnly
                       title={
                         mangaDownloadLocation ||
                         (isMobileApp()
-                          ? "Default (/StrawVerse/Manga)"
+                          ? "Default (/Iconmedia/Manga)"
                           : "Default (Downloads/Manga)")
                       }
                     />
@@ -2579,14 +2579,14 @@ export default function SettingsView({
                       value={moviesDownloadLocation}
                       placeholder={
                         isMobileApp()
-                          ? "Default (/StrawVerse/MoviesSeries)"
+                          ? "Default (/Iconmedia/MoviesSeries)"
                           : "Default (Downloads/MoviesSeries)"
                       }
                       readOnly
                       title={
                         moviesDownloadLocation ||
                         (isMobileApp()
-                          ? "Default (/StrawVerse/MoviesSeries)"
+                          ? "Default (/Iconmedia/MoviesSeries)"
                           : "Default (Downloads/MoviesSeries)")
                       }
                     />
@@ -3564,7 +3564,7 @@ export default function SettingsView({
               </h3>
               <div className="disclaimer-text u-style-94">
                 <p>
-                  <strong>StrawVerse</strong> is an open-source local media
+                  <strong>Iconmedia</strong> is an open-source local media
                   manager and indexing application designed for developers and
                   researchers.
                 </p>

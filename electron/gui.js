@@ -344,6 +344,7 @@ function mergeCookie(headers, dbCookieStr) {
 
 const createWindow = () => {
   global.win = new BrowserWindow({
+    title: "Iconmedia",
     resizable: true,
     webPreferences: {
       nodeIntegration: true,
@@ -1113,10 +1114,10 @@ function registerLinuxProtocol() {
       os.homedir(),
       ".local/share/icons/hicolor/256x256/apps",
     );
-    const localIconPath = path.join(localIconDir, "strawverse.png");
-    const sourceIconPath = path.join(__dirname, "assets", "luffy.png");
+    const localIconPath = path.join(localIconDir, "iconmedia.png");
+    const sourceIconPath = path.join(__dirname, "assets", "iconmedia.png");
 
-    let useIconName = "strawverse";
+    let useIconName = "iconmedia";
     if (fs.existsSync(sourceIconPath)) {
       try {
         if (!fs.existsSync(localIconDir)) {
@@ -1130,15 +1131,15 @@ function registerLinuxProtocol() {
     }
 
     const desktopContent = `[Desktop Entry]
-Name=strawverse
+Name=iconmedia
 Exec="${execPath}" --no-sandbox %U
 Terminal=false
 Type=Application
 Icon=${useIconName}
-StartupWMClass=strawverse
+StartupWMClass=iconmedia
 X-AppImage-Version=${app.getVersion()}
-Comment=Download anime in batches & its fast :3
-MimeType=x-scheme-handler/strawverse;
+Comment=Universal Media Streaming and Batch Downloader
+MimeType=x-scheme-handler/iconmedia;
 Categories=Utility;
 `;
 

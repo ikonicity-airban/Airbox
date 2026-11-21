@@ -36,7 +36,7 @@ export default function Marketplace({ initialType }) {
     Manga: "",
     Movies: "",
   });
-  const [appVersion, setAppVersion] = useState("11.0.4");
+  const [appVersion, setAppVersion] = useState("1.0.0");
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [showRepoModal, setShowRepoModal] = useState(false);
@@ -138,7 +138,7 @@ export default function Marketplace({ initialType }) {
       }
 
       // 5. Fetch current app version
-      let currentAppVer = "11.0.4";
+      let currentAppVer = "1.0.0";
       if (window.sharedStateAPI && window.sharedStateAPI.getAppVersion) {
         try {
           const v = await window.sharedStateAPI.getAppVersion();

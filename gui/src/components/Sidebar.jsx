@@ -43,7 +43,7 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="sidebar-logo-wrapper">
           <img
-            src="/images/logo.webp"
+            src="/images/logo.png"
             alt="logo"
             className="sidebar-logo-img"
           />

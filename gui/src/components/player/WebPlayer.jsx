@@ -441,14 +441,14 @@ export default function VideoPlayer({
         : currentEpisode;
     const displayTitle = animeTitle
       ? `${animeTitle} - Ep ${cleanEp}`
-      : "StrawVerse Video";
+      : "Iconmedia Video";
 
     document.title = displayTitle;
 
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: displayTitle,
-        artist: "StrawVerse",
+        artist: "Iconmedia",
         artwork: image
           ? [{ src: image, sizes: "512x512", type: "image/png" }]
           : [],
@@ -472,7 +472,7 @@ export default function VideoPlayer({
           : currentEpisode;
       const displayTitle = animeTitle
         ? `${animeTitle} - Ep ${cleanEp}`
-        : "StrawVerse Video";
+        : "Iconmedia Video";
       document.title = `${displayTitle} (PiP)`;
     };
 
@@ -484,7 +484,7 @@ export default function VideoPlayer({
           : currentEpisode;
       const displayTitle = animeTitle
         ? `${animeTitle} - Ep ${cleanEp}`
-        : "StrawVerse Video";
+        : "Iconmedia Video";
       document.title = displayTitle;
     };
 
