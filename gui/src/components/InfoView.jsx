@@ -2262,6 +2262,11 @@ export default function InfoView({
       }
 
       let bodyData = {};
+      const isSingleMovie =
+        type === "Movies" &&
+        (details?.type === "Movie" ||
+          (!availableSeasons.length && episodesOrChapters.length <= 1));
+
       if (singleItem) {
         bodyData = {
           id: id,
@@ -2271,17 +2276,14 @@ export default function InfoView({
           provider: details?.provider,
           malid: details?.malid || details?.MalID,
           ...(isAnime ? { subdub: chosenLang, quality: chosenQuality } : {}),
-          season:
-            singleItem.season !== undefined && singleItem.season !== null
+          season: isSingleMovie
+            ? null
+            : singleItem.season !== undefined && singleItem.season !== null
               ? singleItem.season
               : selectedSeason !== "all"
                 ? Number(selectedSeason)
-                : type === "Movies" &&
-                    (details?.type === "Movie" ||
-                      (!availableSeasons.length &&
-                        episodesOrChapters.length <= 1))
-                  ? null
-                  : 1,
+                : 1,
+          isSingleMovie: isSingleMovie,
         };
       } else {
         const itemsToDownload = [];
@@ -2303,19 +2305,26 @@ export default function InfoView({
               itemsToDownload.push({
                 id: loadedItem.id,
                 number: loadedItem.number,
-                season:
-                  loadedItem.season !== undefined && loadedItem.season !== null
+                season: isSingleMovie
+                  ? null
+                  : loadedItem.season !== undefined && loadedItem.season !== null
                     ? loadedItem.season
                     : selectedSeason !== "all"
                       ? Number(selectedSeason)
                       : 1,
+                isSingleMovie: isSingleMovie,
               });
             }
           } else {
             itemsToDownload.push({
               id: null,
               number: num,
-              season: selectedSeason !== "all" ? Number(selectedSeason) : 1,
+              season: isSingleMovie
+                ? null
+                : selectedSeason !== "all"
+                  ? Number(selectedSeason)
+                  : 1,
+              isSingleMovie: isSingleMovie,
             });
           }
         });
@@ -2325,6 +2334,7 @@ export default function InfoView({
           Title: details?.title,
           provider: details?.provider,
           malid: details?.malid || details?.MalID,
+          isSingleMovie: isSingleMovie,
           ...(isAnime ? { SubDub: chosenLang, quality: chosenQuality } : {}),
         };
       }

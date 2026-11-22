@@ -577,8 +577,18 @@ async function generateNfoAndPosterForAnime(
                   );
                 }
               }
+              // Clean up redundant copy in subs/ to avoid folder clutter
+              try {
+                await fs.promises.unlink(path.join(subsDir, subFile));
+              } catch (_) {}
             }
           }
+          try {
+            const remaining = await fs.promises.readdir(subsDir);
+            if (remaining.length === 0) {
+              await fs.promises.rmdir(subsDir);
+            }
+          } catch (_) {}
         }
       }
     }

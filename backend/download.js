@@ -54,6 +54,7 @@ async function downloadMediaMulti({
   fetchAllItemsFn,
   unitName = type === "Anime" || type === "Movies" ? "Episodes" : "Chapters",
   quality = null,
+  isSingleMovie = null,
 }) {
   if (!items || items.length <= 0) {
     return {
@@ -125,6 +126,10 @@ async function downloadMediaMulti({
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
+    const itemIsSingleMovie =
+      item?.isSingleMovie !== undefined && item?.isSingleMovie !== null
+        ? item.isSingleMovie
+        : isSingleMovie;
     const data =
       type === "Movies"
         ? await singleDownloadFn(
@@ -141,6 +146,7 @@ async function downloadMediaMulti({
             subDub,
             item.season,
             quality,
+            itemIsSingleMovie,
           )
         : await singleDownloadFn(
             provider,
@@ -419,6 +425,7 @@ async function downloadMovieMulti(
   SubDub,
   malid = null,
   quality = null,
+  isSingleMovie = null,
 ) {
   return downloadMediaMulti({
     type: "Movies",
@@ -429,6 +436,7 @@ async function downloadMovieMulti(
     subDub: SubDub,
     malid,
     quality,
+    isSingleMovie,
     singleDownloadFn: downloadMovieSingle,
     fetchAllItemsFn: async (prov, mId) => {
       const data = await movieInfo(prov, null, mId);
@@ -453,6 +461,7 @@ async function downloadMovieSingle(
   subdub = null,
   season = null,
   quality = null,
+  isSingleMovieArg = null,
 ) {
   if (!episodeid) {
     return {
@@ -564,12 +573,23 @@ async function downloadMovieSingle(
       /tv:[^:]+:(\d+):\d+/i.test(String(episodeid)) ||
       /[Ss]\d+[Ee]\d+/i.test(String(episodeid));
 
-    if (
-      !isTvEpisodeId &&
-      (resolvedSeason === null ||
-        resolvedSeason === undefined ||
-        Number(resolvedSeason) === 1)
+    if (isSingleMovieArg !== null && isSingleMovieArg !== undefined) {
+      isSingleMovie = Boolean(isSingleMovieArg);
+    } else if (
+      config?.isSingleMovie !== null &&
+      config?.isSingleMovie !== undefined
     ) {
+      isSingleMovie = Boolean(config.isSingleMovie);
+    } else if (isTvEpisodeId) {
+      isSingleMovie = false;
+    } else if (
+      resolvedSeason !== null &&
+      resolvedSeason !== undefined &&
+      Number(resolvedSeason) >= 1
+    ) {
+      // An explicit season number indicates a series episode, not a single movie
+      isSingleMovie = false;
+    } else {
       const num = parseFloat(number);
       if (isNaN(num) || num === 1) {
         try {
@@ -577,27 +597,41 @@ async function downloadMovieSingle(
             "SELECT type, episodes_json FROM Movies WHERE id = ?",
             [movieid],
           );
-          if (!row || !row.type || String(row.type).toLowerCase() === "movie") {
-            if (!row?.episodes_json) {
-              isSingleMovie = true;
-            } else {
-              try {
-                const counts = JSON.parse(row.episodes_json);
-                const totalEps = Object.values(counts).reduce(
-                  (a, b) => a + Number(b),
-                  0,
-                );
-                if (totalEps <= 1) isSingleMovie = true;
-              } catch (_) {
+          if (row) {
+            const rowType = String(row.type || "").toLowerCase();
+            const isSeriesType =
+              rowType === "tv" ||
+              rowType === "series" ||
+              rowType === "tv series" ||
+              rowType === "show";
+            if (!isSeriesType) {
+              if (!row?.episodes_json) {
                 isSingleMovie = true;
+              } else {
+                try {
+                  const counts = JSON.parse(row.episodes_json);
+                  const totalEps = Object.values(counts).reduce(
+                    (a, b) => a + Number(b),
+                    0,
+                  );
+                  if (totalEps <= 1) isSingleMovie = true;
+                } catch (_) {
+                  isSingleMovie = false;
+                }
               }
             }
           }
         } catch (_) {
-          isSingleMovie = true;
+          isSingleMovie = false;
         }
       }
     }
+
+    const finalSeason = isSingleMovie
+      ? null
+      : resolvedSeason !== null && resolvedSeason !== undefined
+        ? Number(resolvedSeason)
+        : 1;
 
     const queueItem = {
       Type: "Movies",
@@ -606,7 +640,7 @@ async function downloadMovieSingle(
       Title: Title,
       SubDub: resolvedSubDub,
       malid: null,
-      season: isSingleMovie ? null : resolvedSeason,
+      season: finalSeason,
       isSingleMovie: isSingleMovie,
       config: {
         Animeprovider: Moviesprovider?.provider_name,
@@ -620,8 +654,12 @@ async function downloadMovieSingle(
         animeNamingScheme: config?.animeNamingScheme || "default",
         moviesNamingScheme: config?.moviesNamingScheme || "default",
         isSingleMovie: isSingleMovie,
+        season: finalSeason,
       },
       epid: episodeid,
+      totalSegments: 0,
+      currentSegments: 0,
+    };
       totalSegments: 0,
       currentSegments: 0,
     };

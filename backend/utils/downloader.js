@@ -1941,9 +1941,14 @@ class downloader {
     if (this.subtitles.length === 0) return;
 
     try {
-      const SubTitleDir = path.join(this.directory, `subs`);
-      if (!fs.existsSync(SubTitleDir)) {
-        fs.mkdirSync(SubTitleDir, { recursive: true });
+      let subDir;
+      if (this.MergeSubtitles) {
+        subDir = path.join(this.directory, `.temp_subs`);
+        if (!fs.existsSync(subDir)) {
+          fs.mkdirSync(subDir, { recursive: true });
+        }
+      } else {
+        subDir = this.directory;
       }
 
       const downloadPromises = this.subtitles.map(async ({ url, lang }) => {
@@ -1983,23 +1988,31 @@ class downloader {
             finalExt = "srt";
           }
 
-          let subtitlePath = path.join(
-            SubTitleDir,
-            `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
-          );
+          let subtitlePath;
+          if (this.MergeSubtitles) {
+            subtitlePath = path.join(
+              subDir,
+              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+            );
+          } else if (this.mp4) {
+            const baseVideoName = path.parse(this.mp4).name;
+            subtitlePath = path.join(
+              this.directory,
+              `${baseVideoName}.${normalizedLang}.${finalExt}`,
+            );
+          } else if (this.fileBase) {
+            subtitlePath = path.join(
+              this.directory,
+              `${this.fileBase}.${normalizedLang}.${finalExt}`,
+            );
+          } else {
+            subtitlePath = path.join(
+              this.directory,
+              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+            );
+          }
 
           if (fs.existsSync(subtitlePath)) {
-            if (!this.MergeSubtitles && this.fileBase && this.mp4) {
-              const siblingSubPath = path.join(
-                this.directory,
-                `${path.parse(this.mp4).name}.${normalizedLang}.${finalExt}`,
-              );
-              if (!fs.existsSync(siblingSubPath)) {
-                await fs.promises
-                  .copyFile(subtitlePath, siblingSubPath)
-                  .catch(() => {});
-              }
-            }
             this.downloadedPaths.push({
               path: subtitlePath,
               lang: normalizedLang,
@@ -2042,32 +2055,49 @@ class downloader {
               subtitleData = this.convertToSRT(subtitleData);
               if (finalExt !== "srt") {
                 finalExt = "srt";
-                subtitlePath = path.join(
-                  SubTitleDir,
-                  `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
-                );
+                if (this.MergeSubtitles) {
+                  subtitlePath = path.join(
+                    subDir,
+                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+                  );
+                } else if (this.mp4) {
+                  const baseVideoName = path.parse(this.mp4).name;
+                  subtitlePath = path.join(
+                    this.directory,
+                    `${baseVideoName}.${normalizedLang}.${finalExt}`,
+                  );
+                } else if (this.fileBase) {
+                  subtitlePath = path.join(
+                    this.directory,
+                    `${this.fileBase}.${normalizedLang}.${finalExt}`,
+                  );
+                }
               }
             } else {
               if (finalExt !== "vtt") {
                 finalExt = "vtt";
-                subtitlePath = path.join(
-                  SubTitleDir,
-                  `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
-                );
+                if (this.MergeSubtitles) {
+                  subtitlePath = path.join(
+                    subDir,
+                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+                  );
+                } else if (this.mp4) {
+                  const baseVideoName = path.parse(this.mp4).name;
+                  subtitlePath = path.join(
+                    this.directory,
+                    `${baseVideoName}.${normalizedLang}.${finalExt}`,
+                  );
+                } else if (this.fileBase) {
+                  subtitlePath = path.join(
+                    this.directory,
+                    `${this.fileBase}.${normalizedLang}.${finalExt}`,
+                  );
+                }
               }
             }
           }
 
           await fs.promises.writeFile(subtitlePath, subtitleData, "utf8");
-          if (!this.MergeSubtitles && this.fileBase && this.mp4) {
-            const siblingSubPath = path.join(
-              this.directory,
-              `${path.parse(this.mp4).name}.${normalizedLang}.${finalExt}`,
-            );
-            await fs.promises
-              .writeFile(siblingSubPath, subtitleData, "utf8")
-              .catch(() => {});
-          }
           this.downloadedPaths.push({
             path: subtitlePath,
             lang: normalizedLang,
@@ -2228,6 +2258,7 @@ class downloader {
           releaseLock();
         }
       }
+      await this.CleanEverything();
       return;
     }
 
@@ -2594,13 +2625,26 @@ class downloader {
     }
 
     if (this.MergeSubtitles) {
+      if (Array.isArray(this.downloadedPaths)) {
+        for (const sub of this.downloadedPaths) {
+          if (sub?.path && fs.existsSync(sub.path)) {
+            await fs.promises.unlink(sub.path).catch(() => {});
+          }
+        }
+      }
+      const tempSubsDir = path.join(this.directory, ".temp_subs");
+      if (fs.existsSync(tempSubsDir)) {
+        try {
+          await fs.promises.rm(tempSubsDir, { recursive: true, force: true });
+        } catch (_) {}
+      }
       const subsDir = path.join(this.directory, "subs");
       if (fs.existsSync(subsDir)) {
         try {
           const files = fs.readdirSync(subsDir);
           const prefix = `${this.Epnum}Ep.`;
           for (const file of files) {
-            if (file.startsWith(prefix)) {
+            if (file.startsWith(prefix) || file.includes("Ep.")) {
               fs.unlinkSync(path.join(subsDir, file));
             }
           }

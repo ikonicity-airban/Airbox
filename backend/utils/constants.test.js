@@ -197,3 +197,37 @@ test("movie filenames do not false-positive as episode numbers", () => {
   assert.strictEqual(getEpisodeNumberFromFilename("Inception [1080p].mp4"), null);
   assert.strictEqual(getEpisodeNumberFromFilename("Fight Club (1999).mkv"), null);
 });
+
+test("series season 1 episode 1 is consistently formatted as series episode and not single movie", () => {
+  // Teen Wolf Season 1 Episode 1 under plex_jellyfin
+  const s01e01 = formatMovieFilename({
+    title: "Teen Wolf",
+    isSingleMovie: false,
+    epNum: 1,
+    season: 1,
+    namingScheme: "plex_jellyfin",
+    quality: "1080p",
+  });
+  assert.strictEqual(s01e01, "Teen Wolf - S01E01 [1080p].mp4");
+
+  // Teen Wolf Season 1 Episode 2 under plex_jellyfin
+  const s01e02 = formatMovieFilename({
+    title: "Teen Wolf",
+    isSingleMovie: false,
+    epNum: 2,
+    season: 1,
+    namingScheme: "plex_jellyfin",
+    quality: "1080p",
+  });
+  assert.strictEqual(s01e02, "Teen Wolf - S01E02 [1080p].mp4");
+
+  // Standalone movie under plex_jellyfin has title and year without episode numbering
+  const singleMovie = formatMovieFilename({
+    title: "Fearless",
+    isSingleMovie: true,
+    namingScheme: "plex_jellyfin",
+    quality: "1080p",
+    year: "2006",
+  });
+  assert.strictEqual(singleMovie, "Fearless (2006) [1080p].mp4");
+});

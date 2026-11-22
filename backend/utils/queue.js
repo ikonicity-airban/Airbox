@@ -856,19 +856,24 @@ async function downloadep(
         Videoconfig?.CustomDownloadLocationAnime) ||
     Videoconfig?.CustomDownloadLocation;
 
+  const isExplicitSingleMovie = Videoconfig?.isSingleMovie === true;
+  const isExplicitSeries =
+    Videoconfig?.isSingleMovie === false ||
+    (Videoconfig?.season !== null &&
+      Videoconfig?.season !== undefined &&
+      Number(Videoconfig?.season) >= 1) ||
+    String(AnimeEpId).match(/tv:[^:]+:(\d+):\d+/i) ||
+    String(AnimeEpId).match(/[Ss]\d+[Ee]\d+/i);
+
   const isSingleMovie =
-    Boolean(Videoconfig?.isSingleMovie) ||
-    (isMovie &&
-      (Videoconfig?.season === null ||
-        Videoconfig?.season === undefined ||
-        Number(Videoconfig?.season) === 1) &&
+    isExplicitSingleMovie ||
+    (!isExplicitSeries &&
+      isMovie &&
+      (Videoconfig?.season === null || Videoconfig?.season === undefined) &&
       (EpNum === null ||
         EpNum === undefined ||
-        Number(EpNum) === 1 ||
         String(EpNum).toLowerCase() === "movie" ||
-        String(EpNum).toLowerCase() === "full movie") &&
-      !String(AnimeEpId).match(/tv:[^:]+:(\d+):\d+/i) &&
-      !String(AnimeEpId).match(/[Ss]\d+[Ee]\d+/i));
+        String(EpNum).toLowerCase() === "full movie"));
 
   const taskSeason =
     Videoconfig?.season !== undefined && Videoconfig?.season !== null
@@ -1397,19 +1402,24 @@ async function downloadEpisodeByQuality(
       });
     }
 
+    const isExplicitSingleMovie = config?.isSingleMovie === true;
+    const isExplicitSeries =
+      config?.isSingleMovie === false ||
+      (config?.season !== null &&
+        config?.season !== undefined &&
+        Number(config?.season) >= 1) ||
+      String(epid).match(/tv:[^:]+:(\d+):\d+/i) ||
+      String(epid).match(/[Ss]\d+[Ee]\d+/i);
+
     const isSingleMovie =
-      Boolean(config?.isSingleMovie) ||
-      (isMovie &&
-        (config?.season === null ||
-          config?.season === undefined ||
-          Number(config?.season) === 1) &&
+      isExplicitSingleMovie ||
+      (!isExplicitSeries &&
+        isMovie &&
+        (config?.season === null || config?.season === undefined) &&
         (episodeNumber === null ||
           episodeNumber === undefined ||
-          Number(episodeNumber) === 1 ||
           String(episodeNumber).toLowerCase() === "movie" ||
-          String(episodeNumber).toLowerCase() === "full movie") &&
-        !String(epid).match(/tv:[^:]+:(\d+):\d+/i) &&
-        !String(epid).match(/[Ss]\d+[Ee]\d+/i));
+          String(episodeNumber).toLowerCase() === "full movie"));
 
     const movieScheme =
       currentSettings?.moviesNamingScheme ||
