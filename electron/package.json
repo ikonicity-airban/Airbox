@@ -5,21 +5,21 @@
   "description": "Airbox - Modern Open Source Streaming and Batch Downloader Studio",
   "main": "gui.js",
   "scripts": {
-    "build:ts": "node node_modules/esbuild/bin/esbuild gui.ts preload.ts sharedState.ts --platform=node --outdir=. && node node_modules/esbuild/bin/esbuild ../backend/*.ts ../backend/routes/*.ts ../backend/utils/*.ts --platform=node --outbase=../backend --outdir=../backend",
+    "build:ts": "node scripts/build-ts.js",
     "prestart": "npm run build:ts",
     "start": "electron .",
     "prebuild": "node scripts/download-binaries.js",
     "build": "npm run build --prefix ../gui",
     "prepackage": "node scripts/download-binaries.js",
-    "package": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --win --linux",
+    "package": "npm run build:ts && node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --win --linux",
     "prepackage:mac": "node scripts/download-binaries.js",
-    "package:mac": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --mac dmg zip --arm64",
+    "package:mac": "npm run build:ts && node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --mac dmg zip --arm64",
     "prepackage:all": "node scripts/download-binaries.js",
-    "package:all": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --win --linux --mac zip",
+    "package:all": "npm run build:ts && node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\" && electron-builder --win --linux --mac zip",
     "release": "bash release.sh",
     "start:prod": "cross-env NODE_ENV=production electron .",
     "postinstall": "electron-builder install-app-deps && node scripts/download-binaries.js",
-    "package:win": "npm run build --prefix ../gui && electron-builder --win"
+    "package:win": "npm run build:ts && npm run build --prefix ../gui && electron-builder --win"
   },
   "repository": {
     "type": "git",
@@ -63,12 +63,12 @@
         }
       ],
       "artifactName": "Airbox.Setup.${version}.exe",
-      "icon": "assets/iconmedia.ico"
+      "icon": "assets/airbox.ico"
     },
     "publish": {
       "provider": "github",
       "owner": "ikonicity-airban",
-      "repo": "Iconmedia",
+      "repo": "Airbox",
       "private": false
     },
     "nsis": {
@@ -90,10 +90,10 @@
         }
       ],
       "category": "Utility",
-      "icon": "assets/iconmedia.png",
+      "icon": "assets/airbox.png",
       "desktop": {
         "entry": {
-          "MimeType": "x-scheme-handler/iconmedia;"
+          "MimeType": "x-scheme-handler/airbox;"
         }
       }
     },
@@ -132,7 +132,7 @@
       ]
     },
     "npmRebuild": false,
-    "icon": "assets/luffy.png",
+    "icon": "assets/airbox.png",
     "compression": "normal",
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*",
