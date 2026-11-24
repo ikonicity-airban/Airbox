@@ -1,4 +1,3 @@
-// libs
 const { logger } = require("./AppLogger");
 const path = require("path");
 const fs = require("fs");
@@ -10,7 +9,7 @@ const {
   queryOne,
   run,
   batchRun,
-  mappingQueryAll,
+  mappingQueryAll
 } = require("./db");
 const ImageCacheManager = require("./ImageCacheManager");
 const { sanitizeFolderName, getDownloadsFolder } = require("./DirectoryMaker");
@@ -23,68 +22,49 @@ const {
   getEpisodeNumberFromFilename,
   getChapterNumberFromFilename,
   parseTags,
-  SEASON_FOLDER_RE,
+  SEASON_FOLDER_RE
 } = require("./constants");
 const { resolveMalIdFromMapping } = require("./mappingResolver");
-
 function formatFallbackTitle(str) {
   if (!str) return "Untitled";
-  return str
-    .replace(/[^a-zA-Z0-9]/g, " ")
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ")
-    .trim();
+  return str.replace(/[^a-zA-Z0-9]/g, " ").split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ").trim();
 }
-
 function cleanStringForMatching(s) {
   if (!s) return "";
-  return s
-    .toLowerCase()
-    .replace(/-[a-z0-9]{5}$/i, "")
-    .replace(/[^a-z0-9]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return s.toLowerCase().replace(/-[a-z0-9]{5}$/i, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
 }
-
 async function getMalIdFromMapping(type, providerName, cleanId) {
   if (!cleanId) return null;
   try {
     return await resolveMalIdFromMapping({
       id: cleanId,
       provider: providerName,
-      mediaType: type,
+      mediaType: type
     });
   } catch (e) {
     logger.error(`Error in getMalIdFromMapping: ${e.message}`);
     return null;
   }
 }
-
-// Add metadata
 async function MetadataAdd(type, valuesToAdd) {
   if (!tables[type] || !valuesToAdd?.id) {
     throw new Error(`Invalid args!`);
   }
-
   if (type === "Movies") {
     delete valuesToAdd.MalID;
   } else if (!valuesToAdd.MalID || valuesToAdd.MalID === "") {
     try {
       const customMappingRow = await queryOne(
         "SELECT malid FROM unlinked_mal_ids WHERE id = ?",
-        [valuesToAdd.id],
+        [valuesToAdd.id]
       );
-
       if (customMappingRow) {
-        valuesToAdd.MalID = customMappingRow.malid
-          ? String(customMappingRow.malid)
-          : null;
+        valuesToAdd.MalID = customMappingRow.malid ? String(customMappingRow.malid) : null;
       } else {
         const malId = await getMalIdFromMapping(
           type,
           valuesToAdd.provider,
-          valuesToAdd.id,
+          valuesToAdd.id
         );
         if (malId) {
           valuesToAdd.MalID = String(malId);
@@ -94,11 +74,9 @@ async function MetadataAdd(type, valuesToAdd) {
       logger.error(`Error resolving MalID in MetadataAdd: ${e.message}`);
     }
   }
-
   let existingRecord = await queryOne(`SELECT * FROM ${type} WHERE id = ?`, [
-    valuesToAdd?.id,
+    valuesToAdd?.id
   ]);
-
   if (!existingRecord) {
     if (valuesToAdd?.ImageUrl) {
       let Imageurl = valuesToAdd?.ImageUrl?.trim();
@@ -106,7 +84,7 @@ async function MetadataAdd(type, valuesToAdd) {
       if (Imageurl.startsWith("data:image/")) {
         try {
           const match = Imageurl.match(
-            /^data:image\/([a-zA-Z+]+);base64,(.+)$/,
+            /^data:image\/([a-zA-Z+]+);base64,(.+)$/
           );
           if (match) {
             const buffer = Buffer.from(match[2], "base64");
@@ -122,38 +100,32 @@ async function MetadataAdd(type, valuesToAdd) {
         }
         try {
           const response = await global.axios.get(Imageurl, {
-            responseType: "arraybuffer",
+            responseType: "arraybuffer"
           });
-
           await ImageCacheManager.cacheImage(
             Imageurl,
-            Buffer.from(response.data),
+            Buffer.from(response.data)
           );
           valuesToAdd.image = null;
         } catch (err) {
           logger.error(`Failed to fetch and cache image from: ${Imageurl}`);
           const fallbackUrl = valuesToAdd.scraper_image;
-          if (
-            fallbackUrl &&
-            fallbackUrl !== Imageurl &&
-            typeof fallbackUrl === "string" &&
-            fallbackUrl.startsWith("http")
-          ) {
+          if (fallbackUrl && fallbackUrl !== Imageurl && typeof fallbackUrl === "string" && fallbackUrl.startsWith("http")) {
             try {
               logger.info(
-                `Attempting fallback image caching from: ${fallbackUrl}`,
+                `Attempting fallback image caching from: ${fallbackUrl}`
               );
               const fallbackResponse = await global.axios.get(fallbackUrl, {
-                responseType: "arraybuffer",
+                responseType: "arraybuffer"
               });
               await ImageCacheManager.cacheImage(
                 fallbackUrl,
-                Buffer.from(fallbackResponse.data),
+                Buffer.from(fallbackResponse.data)
               );
               valuesToAdd.image_url = fallbackUrl;
             } catch (fallbackErr) {
               logger.error(
-                `Failed to fetch fallback image from: ${fallbackUrl}`,
+                `Failed to fetch fallback image from: ${fallbackUrl}`
               );
             }
           }
@@ -161,25 +133,18 @@ async function MetadataAdd(type, valuesToAdd) {
         }
       }
     }
-
     if (valuesToAdd?.title) {
       const baseFolderName = sanitizeFolderName(valuesToAdd.title);
       valuesToAdd.folder_name = baseFolderName;
     }
-
     if (!valuesToAdd.hasOwnProperty("CustomTag")) {
       valuesToAdd.CustomTag = "";
     }
-
     try {
       const validColumns = Object.keys(tables[type]);
       const filteredValues = {};
-
       validColumns.forEach((column) => {
-        if (
-          valuesToAdd.hasOwnProperty(column) &&
-          valuesToAdd[column] !== undefined
-        ) {
+        if (valuesToAdd.hasOwnProperty(column) && valuesToAdd[column] !== void 0) {
           filteredValues[column] = valuesToAdd[column];
         } else {
           const columnType = tables[type][column];
@@ -192,17 +157,12 @@ async function MetadataAdd(type, valuesToAdd) {
           }
         }
       });
-
       const fields = Object.keys(filteredValues).join(", ") + ", last_updated";
-      const placeholders =
-        Object.keys(filteredValues)
-          .map(() => "?")
-          .join(", ") + ", CURRENT_TIMESTAMP";
+      const placeholders = Object.keys(filteredValues).map(() => "?").join(", ") + ", CURRENT_TIMESTAMP";
       const values = Object.values(filteredValues);
-
       await run(
         `INSERT OR REPLACE INTO ${type} (${fields}) VALUES (${placeholders})`,
-        values,
+        values
       );
     } catch (error) {
       throw new Error(`Error inserting into ${type}: ${error.message}`);
@@ -213,48 +173,44 @@ async function MetadataAdd(type, valuesToAdd) {
     try {
       const parsed = JSON.parse(currentTag);
       if (Array.isArray(parsed) && parsed.length > 0) hasTag = true;
-    } catch (e) {}
+    } catch (e) {
+    }
     if (!currentTag || currentTag === "[]" || !hasTag) {
       const defaultTag = JSON.stringify([
-        type === "Manga" ? "Reading" : "Watching",
+        type === "Manga" ? "Reading" : "Watching"
       ]);
       await run(
         `UPDATE ${type} SET CustomTag = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
-        [defaultTag, existingRecord.id],
+        [defaultTag, existingRecord.id]
       );
     }
-
-    if (
-      type !== "Movies" &&
-      (!existingRecord.MalID || existingRecord.MalID === "")
-    ) {
+    if (type !== "Movies" && (!existingRecord.MalID || existingRecord.MalID === "")) {
       let malIdToUpdate = valuesToAdd?.MalID;
       if (!malIdToUpdate && existingRecord.title) {
         try {
           const baseTitle = existingRecord.title.replace(
             /\s+(sub|dub|both)$/i,
-            "",
+            ""
           );
           const match = await queryOne(
             `SELECT MalID FROM ${type} WHERE (title LIKE ? OR folder_name LIKE ?) AND MalID IS NOT NULL AND MalID != '' LIMIT 1`,
-            [`%${baseTitle}%`, `%${baseTitle}%`],
+            [`%${baseTitle}%`, `%${baseTitle}%`]
           );
           if (match?.MalID) {
             malIdToUpdate = match.MalID;
           }
-        } catch (_) {}
+        } catch (_) {
+        }
       }
       if (malIdToUpdate) {
         await run(
           `UPDATE ${type} SET MalID = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
-          [String(malIdToUpdate), existingRecord.id],
+          [String(malIdToUpdate), existingRecord.id]
         );
       }
     }
   }
 }
-
-// Remove metadata
 async function MetadataRemove(type, id) {
   if (!tables[type]) {
     throw new Error(`Invalid table: ${type}`);
@@ -262,47 +218,42 @@ async function MetadataRemove(type, id) {
   try {
     const row = await queryOne(
       `SELECT image_url FROM ${type} WHERE id = ? OR folder_name = ?`,
-      [id, id],
+      [id, id]
     );
-
     if (row && row.image_url) {
       const imageUrl = row.image_url;
-      const countAnime =
-        (await queryOne(
-          "SELECT COUNT(*) as count FROM Anime WHERE image_url = ?",
-          [imageUrl],
-        )?.count) || 0;
-      const countManga =
-        (await queryOne(
-          "SELECT COUNT(*) as count FROM Manga WHERE image_url = ?",
-          [imageUrl],
-        )?.count) || 0;
-      const countMovies =
-        (await queryOne(
-          "SELECT COUNT(*) as count FROM Movies WHERE image_url = ?",
-          [imageUrl],
-        )?.count) || 0;
+      const countAnime = await queryOne(
+        "SELECT COUNT(*) as count FROM Anime WHERE image_url = ?",
+        [imageUrl]
+      )?.count || 0;
+      const countManga = await queryOne(
+        "SELECT COUNT(*) as count FROM Manga WHERE image_url = ?",
+        [imageUrl]
+      )?.count || 0;
+      const countMovies = await queryOne(
+        "SELECT COUNT(*) as count FROM Movies WHERE image_url = ?",
+        [imageUrl]
+      )?.count || 0;
       if (countAnime + countManga + countMovies <= 1) {
         ImageCacheManager.removeCachedImage(imageUrl).catch((err) => {
           logger.error(`Error in removeCachedImage: ${err.message}`);
         });
       }
     }
-
     await run(`DELETE FROM ${type} WHERE id = ? OR folder_name = ?`, [id, id]);
     if (type === "Anime") {
       try {
         await run(
           "DELETE FROM SkipTimes WHERE anime_id = ? OR anime_id LIKE ?",
-          [id, `${id}-%`],
+          [id, `${id}-%`]
         );
-      } catch (_) {}
+      } catch (_) {
+      }
     }
   } catch (error) {
     throw new Error(`Error deleting from ${type}: ${error.message}`);
   }
 }
-
 function resolveLocalFolder(metadata, folderSet, _type) {
   let resolvedFolder = metadata.folder_name || "";
   if (resolvedFolder && folderSet.has(resolvedFolder)) {
@@ -320,7 +271,6 @@ function resolveLocalFolder(metadata, folderSet, _type) {
       }
     }
   }
-
   if (metadata.title) {
     const baseName = sanitizeFolderName(metadata.title);
     const nameCandidates = [
@@ -328,7 +278,7 @@ function resolveLocalFolder(metadata, folderSet, _type) {
       `${baseName}_sub`,
       `${baseName}_dub`,
       `${baseName}_hsub`,
-      cleanStringForMatching(metadata.title),
+      cleanStringForMatching(metadata.title)
     ];
     for (const cand of nameCandidates) {
       if (cand && folderSet.has(cand)) {
@@ -336,7 +286,6 @@ function resolveLocalFolder(metadata, folderSet, _type) {
       }
     }
   }
-
   if (metadata.linkedProviders) {
     for (const lp of metadata.linkedProviders) {
       const lpName = lp.folder_name || sanitizeFolderName(lp.title);
@@ -346,7 +295,7 @@ function resolveLocalFolder(metadata, folderSet, _type) {
           lp.id,
           `${lpName}_sub`,
           `${lpName}_dub`,
-          `${lpName}_hsub`,
+          `${lpName}_hsub`
         ];
         for (const cand of lpCandidates) {
           if (cand && folderSet.has(cand)) {
@@ -356,15 +305,12 @@ function resolveLocalFolder(metadata, folderSet, _type) {
       }
     }
   }
-
   return null;
 }
-
 function matchSeasonYearHelper(airedStr, season, year) {
   if (!airedStr && (season || year)) return false;
   if (!season && !year) return true;
   const s = String(airedStr).toLowerCase();
-
   if (year && year !== "All" && year !== "") {
     if (year === "Older") {
       const match = s.match(/\b(19\d\d|200\d)\b/);
@@ -373,45 +319,27 @@ function matchSeasonYearHelper(airedStr, season, year) {
       return false;
     }
   }
-
   if (season && season !== "All" && season !== "") {
     const sLower = season.toLowerCase();
     if (s.includes(sLower)) return true;
-
     const winterMonths = ["jan", "feb", "mar", "-01-", "-02-", "-03-"];
     const springMonths = ["apr", "may", "jun", "-04-", "-05-", "-06-"];
     const summerMonths = ["jul", "aug", "sep", "-07-", "-08-", "-09-"];
     const fallMonths = ["oct", "nov", "dec", "-10-", "-11-", "-12-"];
-
     let months = [];
     if (sLower === "winter") months = winterMonths;
     else if (sLower === "spring") months = springMonths;
     else if (sLower === "summer") months = summerMonths;
     else if (sLower === "fall") months = fallMonths;
-
     return months.some((m) => s.includes(m));
   }
-
   return true;
 }
-
-// Get All Metadata
-async function getAllMetadata(
-  type,
-  baseDir,
-  page = 1,
-  tag = null,
-  filters = {},
-  keyword = "",
-) {
-  baseDir =
-    typeof baseDir === "string" && baseDir.trim()
-      ? baseDir
-      : getDownloadsFolder();
+async function getAllMetadata(type, baseDir, page = 1, tag = null, filters = {}, keyword = "") {
+  baseDir = typeof baseDir === "string" && baseDir.trim() ? baseDir : getDownloadsFolder();
   if (!tables[type]) {
     throw new Error(`Invalid table: ${type}`);
   }
-
   try {
     const candidateDirs = [];
     const addDir = (d) => {
@@ -435,24 +363,15 @@ async function getAllMetadata(
       const downloadsRoot = getDownloadsFolder();
       addDir(path.join(downloadsRoot, type));
     }
-
     const folders = [];
-    const seenFolders = new Set();
+    const seenFolders = /* @__PURE__ */ new Set();
     for (const cDir of candidateDirs) {
       try {
         const directories = await fs.promises.readdir(cDir, {
-          withFileTypes: true,
+          withFileTypes: true
         });
         for (const dir of directories) {
-          if (
-            dir.isDirectory() &&
-            dir.name !== type &&
-            dir.name !== "Anime" &&
-            dir.name !== "Manga" &&
-            dir.name !== "Movies" &&
-            dir.name !== "MoviesSeries" &&
-            !dir.name.startsWith(".")
-          ) {
+          if (dir.isDirectory() && dir.name !== type && dir.name !== "Anime" && dir.name !== "Manga" && dir.name !== "Movies" && dir.name !== "MoviesSeries" && !dir.name.startsWith(".")) {
             const subDirPath = path.join(cDir, dir.name);
             if (hasLocalMediaFiles(subDirPath, type)) {
               if (!seenFolders.has(dir.name)) {
@@ -460,15 +379,10 @@ async function getAllMetadata(
                 folders.push(dir.name);
               }
             }
-            // Media-server layout: each "<Show>/Season NN" is its own entry
             for (const sub of fs.readdirSync(subDirPath, {
-              withFileTypes: true,
+              withFileTypes: true
             })) {
-              if (
-                sub.isDirectory() &&
-                SEASON_FOLDER_RE.test(sub.name) &&
-                hasLocalMediaFiles(path.join(subDirPath, sub.name), type)
-              ) {
+              if (sub.isDirectory() && SEASON_FOLDER_RE.test(sub.name) && hasLocalMediaFiles(path.join(subDirPath, sub.name), type)) {
                 const seasonKey = `${dir.name}/${sub.name}`;
                 if (!seenFolders.has(seasonKey)) {
                   seenFolders.add(seasonKey);
@@ -478,79 +392,58 @@ async function getAllMetadata(
             }
           }
         }
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
     let storedMetadata = [];
     try {
-      if (
-        tag &&
-        tag !== "All" &&
-        tag !== "" &&
-        tag.toLowerCase() !== "downloads"
-      ) {
+      if (tag && tag !== "All" && tag !== "" && tag.toLowerCase() !== "downloads") {
         const likeTag = `%"${tag}"%`;
         storedMetadata = await queryAll(
           `SELECT * FROM ${type} WHERE CustomTag = ? OR CustomTag LIKE ? ORDER BY last_updated DESC`,
-          [tag, likeTag],
+          [tag, likeTag]
         );
       } else {
         storedMetadata = await queryAll(
-          `SELECT * FROM ${type} ORDER BY last_updated DESC`,
+          `SELECT * FROM ${type} ORDER BY last_updated DESC`
         );
       }
     } catch (err) {
       storedMetadata = [];
     }
-
     const folderSet = new Set(folders);
-    const missingFolders = storedMetadata
-      .filter(
-        (entry) =>
-          !folderSet.has(entry.folder_name) &&
-          (!entry.CustomTag || entry.CustomTag === "") &&
-          (!entry.MalID || entry.MalID === ""),
-      )
-      .map((entry) => entry.folder_name)
-      .filter(Boolean);
-
+    const missingFolders = storedMetadata.filter(
+      (entry) => !folderSet.has(entry.folder_name) && (!entry.CustomTag || entry.CustomTag === "") && (!entry.MalID || entry.MalID === "")
+    ).map((entry) => entry.folder_name).filter(Boolean);
     if (missingFolders.length > 0) {
       const placeholders = missingFolders.map(() => "?").join(",");
       run(
         `DELETE FROM ${type} WHERE folder_name IN (${placeholders})`,
-        missingFolders,
+        missingFolders
       );
       if (type === "Anime") {
         run(
-          "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)",
+          "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)"
         );
       }
     }
-
     try {
       storedMetadata = await queryAll(
-        `SELECT * FROM ${type} ORDER BY last_updated DESC`,
+        `SELECT * FROM ${type} ORDER BY last_updated DESC`
       );
-
-      if (
-        tag &&
-        tag !== "All" &&
-        tag !== "" &&
-        tag.toLowerCase() !== "downloads"
-      ) {
+      if (tag && tag !== "All" && tag !== "" && tag.toLowerCase() !== "downloads") {
         const targetTag = tag.toLowerCase().trim();
         storedMetadata = storedMetadata.filter((item) => {
           if (!item.CustomTag) return false;
           const tags = parseTags(item.CustomTag);
           return tags.some(
-            (t) => t && String(t).toLowerCase().trim() === targetTag,
+            (t) => t && String(t).toLowerCase().trim() === targetTag
           );
         });
       }
     } catch (err) {
       storedMetadata = [];
     }
-
     storedMetadata.forEach((entry) => {
       if (!entry.title || entry.title.trim() === "") {
         if (entry.folder_name) {
@@ -563,87 +456,59 @@ async function getAllMetadata(
       }
       entry.image = entry.image_url || null;
     });
-
     const storedFolderSet = new Set(storedMetadata.map((m) => m.folder_name));
     folders.forEach((alltitles) => {
       if (storedFolderSet.has(alltitles)) return;
-
-      if (
-        tag &&
-        tag !== "All" &&
-        tag !== "" &&
-        tag.toLowerCase() !== "downloads"
-      )
+      if (tag && tag !== "All" && tag !== "" && tag.toLowerCase() !== "downloads")
         return;
-
       storedMetadata.push({
         title: formatFallbackTitle(alltitles),
         folder_name: alltitles,
         id: alltitles,
-        type: type,
+        type,
         provider: "local source",
-        CustomTag: "",
+        CustomTag: ""
       });
     });
-
     storedMetadata.forEach((entry) => {
       if (entry.title) {
-        entry.title = entry.title
-          .replace(/\s+sub$/i, "")
-          .replace(/\s+dub$/i, "")
-          .replace(/\s+both$/i, "")
-          .replace(/\s+sub\/dub$/i, "");
+        entry.title = entry.title.replace(/\s+sub$/i, "").replace(/\s+dub$/i, "").replace(/\s+both$/i, "").replace(/\s+sub\/dub$/i, "");
       }
     });
-
-    // Filter out pure backend links (no local folders and no custom tags)
     storedMetadata = storedMetadata.filter((entry) => {
-      const folderExists = entry.folder_name
-        ? folderSet.has(entry.folder_name)
-        : false;
-      const hasTags =
-        entry.CustomTag && entry.CustomTag !== "" && entry.CustomTag !== "[]";
+      const folderExists = entry.folder_name ? folderSet.has(entry.folder_name) : false;
+      const hasTags = entry.CustomTag && entry.CustomTag !== "" && entry.CustomTag !== "[]";
       return folderExists || hasTags;
     });
-
     const malMap = {};
     const uniqueMalIds = Array.from(
       new Set(
-        storedMetadata
-          .map((entry) => entry.MalID)
-          .filter((malId) => malId && malId !== ""),
-      ),
+        storedMetadata.map((entry) => entry.MalID).filter((malId) => malId && malId !== "")
+      )
     );
-
     if (uniqueMalIds.length > 0) {
       try {
         const tableName = type === "Anime" ? "MyAnimeList" : "MyMangaList";
-        const columns =
-          type === "Anime"
-            ? "id, title, totalEpisodes, watched, status"
-            : "id, title, totalChapters as totalEpisodes, read as watched, status";
+        const columns = type === "Anime" ? "id, title, totalEpisodes, watched, status" : "id, title, totalChapters as totalEpisodes, read as watched, status";
         const placeholders = uniqueMalIds.map(() => "?").join(",");
         const malRows = await queryAll(
           `SELECT ${columns} FROM ${tableName} WHERE id IN (${placeholders})`,
-          uniqueMalIds.map(String),
+          uniqueMalIds.map(String)
         );
         malRows.forEach((r) => {
           malMap[String(r.id)] = {
             title: r.title || null,
             totalEpisodes: r.totalEpisodes || 0,
             watched: r.watched || 0,
-            status: r.status || "",
+            status: r.status || ""
           };
         });
       } catch (e) {
         logger.error(`Error fetching malMap for unique MAL IDs: ${e.message}`);
       }
     }
-
-    // Group and merge entries by MalID
     let groupedMetadata = [];
     const malIdGroups = {};
-
     storedMetadata.forEach((entry) => {
       if (entry.MalID && entry.MalID !== "") {
         if (!malIdGroups[entry.MalID]) {
@@ -654,29 +519,21 @@ async function getAllMetadata(
         groupedMetadata.push(entry);
       }
     });
-
     Object.keys(malIdGroups).forEach((malId) => {
       const group = malIdGroups[malId];
       const mainEntry = group[0];
-
       let bestTitle = mainEntry.title;
-
       const malInfo = malMap[String(malId)];
       if (malInfo && malInfo.title) {
         bestTitle = malInfo.title;
       }
-
       if (bestTitle === mainEntry.title) {
-        const cleanedFolderNames = group
-          .map((g) => cleanStringForMatching(g.folder_name || g.id))
-          .filter(Boolean);
-
+        const cleanedFolderNames = group.map((g) => cleanStringForMatching(g.folder_name || g.id)).filter(Boolean);
         const matchingEntry = group.find((g) => {
           if (!g.title) return false;
           const cleanedTitle = cleanStringForMatching(g.title);
           return cleanedFolderNames.includes(cleanedTitle);
         });
-
         if (matchingEntry) {
           bestTitle = matchingEntry.title;
         } else {
@@ -684,10 +541,7 @@ async function getAllMetadata(
             const match = group.find((g) => {
               if (!g.title) return false;
               const cleanedTitle = cleanStringForMatching(g.title);
-              return (
-                cleanedTitle.includes(folderName) ||
-                folderName.includes(cleanedTitle)
-              );
+              return cleanedTitle.includes(folderName) || folderName.includes(cleanedTitle);
             });
             if (match) {
               bestTitle = match.title;
@@ -696,40 +550,30 @@ async function getAllMetadata(
           }
         }
       }
-
       if (bestTitle) {
-        bestTitle = bestTitle
-          .replace(/\s+sub$/i, "")
-          .replace(/\s+dub$/i, "")
-          .replace(/\s+both$/i, "")
-          .replace(/\s+sub\/dub$/i, "");
+        bestTitle = bestTitle.replace(/\s+sub$/i, "").replace(/\s+dub$/i, "").replace(/\s+both$/i, "").replace(/\s+sub\/dub$/i, "");
       }
-
       mainEntry.title = bestTitle;
-
       mainEntry.linkedProviders = group.map((g) => ({
         id: g.id,
         provider: g.provider,
         CustomTag: g.CustomTag,
         title: g.title,
-        folder_name: g.folder_name,
+        folder_name: g.folder_name
       }));
-
       groupedMetadata.push(mainEntry);
     });
-
     if (tag && tag.toLowerCase() === "downloads") {
       groupedMetadata = groupedMetadata.filter((item) => {
         const folder = resolveLocalFolder(item, folderSet, type);
         return !!folder;
       });
     }
-
     const siblingsMap = {};
     if (type === "Anime") {
       try {
         const animeRows = await queryAll(
-          "SELECT id, MalID FROM Anime WHERE MalID IS NOT NULL AND MalID != ''",
+          "SELECT id, MalID FROM Anime WHERE MalID IS NOT NULL AND MalID != ''"
         );
         animeRows.forEach((r) => {
           if (!siblingsMap[r.MalID]) {
@@ -737,9 +581,9 @@ async function getAllMetadata(
           }
           siblingsMap[r.MalID].push(r.id);
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     }
-
     const watchMap = {};
     if (type === "Anime") {
       try {
@@ -753,11 +597,12 @@ async function getAllMetadata(
             const num = Number(r.max_ep);
             watchMap[r.anime_id] = Math.max(
               watchMap[r.anime_id] || 0,
-              isNaN(num) ? 0 : num,
+              isNaN(num) ? 0 : num
             );
           }
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     } else if (type === "Movies") {
       try {
         const watchRows = await queryAll(`
@@ -770,11 +615,12 @@ async function getAllMetadata(
             const num = Number(r.max_ep);
             watchMap[r.movie_id] = Math.max(
               watchMap[r.movie_id] || 0,
-              isNaN(num) ? 0 : num,
+              isNaN(num) ? 0 : num
             );
           }
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     } else if (type === "Manga") {
       try {
         const readRows = await queryAll(`
@@ -787,80 +633,70 @@ async function getAllMetadata(
             const num = Number(r.max_ch);
             watchMap[r.manga_id] = Math.max(
               watchMap[r.manga_id] || 0,
-              isNaN(num) ? 0 : num,
+              isNaN(num) ? 0 : num
             );
           }
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     }
-
     const mappingMap = {};
     if (type === "Anime") {
       try {
         const mappingRows = await mappingQueryAll(
-          "SELECT malid, livechart_id FROM anime",
+          "SELECT malid, livechart_id FROM anime"
         );
         mappingRows.forEach((r) => {
           mappingMap[Number(r.malid)] = r.livechart_id;
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     }
-
     const upcomingMap = {};
     const maxAiredMap = {};
     const recentlyAiredMap = {};
     if (type === "Anime") {
       try {
-        const now = Math.floor(Date.now() / 1000);
-        const localToday = new Date();
-        const localTodayStart =
-          new Date(
-            localToday.getFullYear(),
-            localToday.getMonth(),
-            localToday.getDate(),
-            0,
-            0,
-            0,
-          ).getTime() / 1000;
+        const now = Math.floor(Date.now() / 1e3);
+        const localToday = /* @__PURE__ */ new Date();
+        const localTodayStart = new Date(
+          localToday.getFullYear(),
+          localToday.getMonth(),
+          localToday.getDate(),
+          0,
+          0,
+          0
+        ).getTime() / 1e3;
         const localYesterdayStart = localTodayStart - 24 * 3600;
-
         const upcomingRows = await mappingQueryAll(
           `
           SELECT livechart_id, episode, date 
           FROM next_episodes 
           WHERE date > ?
         `,
-          [now],
+          [now]
         );
         upcomingRows.forEach((r) => {
-          if (
-            !upcomingMap[r.livechart_id] ||
-            upcomingMap[r.livechart_id].date > r.date
-          ) {
+          if (!upcomingMap[r.livechart_id] || upcomingMap[r.livechart_id].date > r.date) {
             upcomingMap[r.livechart_id] = { episode: r.episode, date: r.date };
           }
         });
-
         const recentlyAiredRows = await mappingQueryAll(
           `
           SELECT livechart_id, episode, date 
           FROM next_episodes 
           WHERE date <= ? AND date >= ?
         `,
-          [now, localYesterdayStart],
+          [now, localYesterdayStart]
         );
         recentlyAiredRows.forEach((r) => {
-          if (
-            !recentlyAiredMap[r.livechart_id] ||
-            recentlyAiredMap[r.livechart_id].date < r.date
-          ) {
+          if (!recentlyAiredMap[r.livechart_id] || recentlyAiredMap[r.livechart_id].date < r.date) {
             recentlyAiredMap[r.livechart_id] = {
               episode: r.episode,
-              date: r.date,
+              date: r.date
             };
           }
         });
-
         const maxAiredRows = await mappingQueryAll(
           `
           SELECT livechart_id, MAX(episode) as max_aired 
@@ -868,33 +704,30 @@ async function getAllMetadata(
           WHERE date <= ? 
           GROUP BY livechart_id
         `,
-          [now],
+          [now]
         );
         maxAiredRows.forEach((r) => {
           maxAiredMap[r.livechart_id] = r.max_aired;
         });
-      } catch (e) {}
+      } catch (e) {
+      }
     }
-
     groupedMetadata.forEach((item) => {
       let totalEpisodes = 0;
       let watchedEpisodes = 0;
       let nextEpisodeIn = null;
       let maxAired = null;
       let malStatus = "";
-
       if (item.MalID && malMap[String(item.MalID)]) {
         const malInfo = malMap[String(item.MalID)];
         totalEpisodes = malInfo.totalEpisodes;
         watchedEpisodes = malInfo.watched;
         malStatus = malInfo.status;
       }
-
       if (type === "Anime" || type === "Manga") {
         const mediaIds = Array.from(
-          new Set([item.id, ...(siblingsMap[item.MalID] || [])]),
+          /* @__PURE__ */ new Set([item.id, ...siblingsMap[item.MalID] || []])
         );
-
         let localWatched = 0;
         mediaIds.forEach((mediaId) => {
           if (watchMap[mediaId]) {
@@ -903,18 +736,14 @@ async function getAllMetadata(
         });
         watchedEpisodes = Math.max(watchedEpisodes, localWatched);
       }
-
       if (type === "Anime") {
         if (item.MalID && mappingMap[Number(item.MalID)]) {
           const livechartId = mappingMap[Number(item.MalID)];
-
-          if (maxAiredMap[livechartId] !== undefined) {
+          if (maxAiredMap[livechartId] !== void 0) {
             maxAired = maxAiredMap[livechartId];
           }
-
           let nextEp = upcomingMap[livechartId];
           let showAired = false;
-
           if (recentlyAiredMap[livechartId]) {
             const airedEp = recentlyAiredMap[livechartId];
             if (watchedEpisodes < airedEp.episode) {
@@ -922,18 +751,16 @@ async function getAllMetadata(
               showAired = true;
             }
           }
-
           if (nextEp) {
             if (watchedEpisodes >= nextEp.episode - 1) {
               if (showAired) {
                 nextEpisodeIn = `Ep ${nextEp.episode}: Aired`;
               } else {
-                const now = Math.floor(Date.now() / 1000);
+                const now = Math.floor(Date.now() / 1e3);
                 const diff = nextEp.date - now;
                 const minutes = Math.ceil(diff / 60);
                 const hours = Math.ceil(diff / 3600);
                 const days = Math.ceil(diff / (24 * 3600));
-
                 if (days > 0) {
                   nextEpisodeIn = `Ep ${nextEp.episode}: ${days} day${days > 1 ? "s" : ""}`;
                 } else if (hours > 0) {
@@ -948,29 +775,19 @@ async function getAllMetadata(
           }
         }
       }
-
-      const isCompleted =
-        malStatus === "completed" ||
-        (totalEpisodes > 0 && watchedEpisodes >= totalEpisodes);
-
-      let sortWeight = 30; // Default: Plan to Watch / Not Started (watched === 0)
-
+      const isCompleted = malStatus === "completed" || totalEpisodes > 0 && watchedEpisodes >= totalEpisodes;
+      let sortWeight = 30;
       if (isCompleted && nextEpisodeIn === null) {
-        sortWeight = 50; // Fully Completed (move to bottom)
+        sortWeight = 50;
       } else if (nextEpisodeIn !== null) {
-        sortWeight = 40; // Caught up / Completed but waiting for next release (nothing to watch right now)
+        sortWeight = 40;
       } else if (watchedEpisodes > 0) {
-        if (
-          type === "Anime" &&
-          maxAired !== null &&
-          watchedEpisodes < maxAired
-        ) {
-          sortWeight = 10; // Watching with new aired episodes (priority 1)
+        if (type === "Anime" && maxAired !== null && watchedEpisodes < maxAired) {
+          sortWeight = 10;
         } else {
-          sortWeight = 20; // Active Watching - behind or no schedule info
+          sortWeight = 20;
         }
       }
-
       item.sortWeight = sortWeight;
       item.watched = watchedEpisodes;
       item.totalEpisodes = totalEpisodes;
@@ -978,18 +795,11 @@ async function getAllMetadata(
       item.isCompleted = isCompleted;
       item.status = isCompleted ? "completed" : malStatus || item.status;
     });
-
-    // Sort storedMetadata by weight groups, watched progress, and finally recency
     groupedMetadata.sort((a, b) => {
       if (a.sortWeight !== b.sortWeight) {
         return a.sortWeight - b.sortWeight;
       }
-      if (
-        a.sortWeight === 10 ||
-        a.sortWeight === 20 ||
-        a.sortWeight === 30 ||
-        a.sortWeight === 40
-      ) {
+      if (a.sortWeight === 10 || a.sortWeight === 20 || a.sortWeight === 30 || a.sortWeight === 40) {
         if (b.watched !== a.watched) {
           return b.watched - a.watched;
         }
@@ -998,78 +808,57 @@ async function getAllMetadata(
       const timeB = b.last_updated ? new Date(b.last_updated).getTime() : 0;
       return timeB - timeA;
     });
-
     storedMetadata = groupedMetadata;
-
     if (keyword && typeof keyword === "string" && keyword.trim()) {
       const cleanKw = keyword.trim().toLowerCase();
-      storedMetadata = storedMetadata.filter((item) =>
-        (item.title || "").toLowerCase().includes(cleanKw),
+      storedMetadata = storedMetadata.filter(
+        (item) => (item.title || "").toLowerCase().includes(cleanKw)
       );
     }
-
     if (filters && typeof filters === "object") {
       if (filters.genre && filters.genre !== "All" && filters.genre !== "") {
         const targetGenre = String(filters.genre).toLowerCase();
-        storedMetadata = storedMetadata.filter((item) =>
-          (item.genres || "").toLowerCase().includes(targetGenre),
+        storedMetadata = storedMetadata.filter(
+          (item) => (item.genres || "").toLowerCase().includes(targetGenre)
         );
       }
-
-      if (
-        filters.mapping &&
-        filters.mapping !== "All" &&
-        filters.mapping !== ""
-      ) {
+      if (filters.mapping && filters.mapping !== "All" && filters.mapping !== "") {
         if (filters.mapping === "mapped") {
-          storedMetadata = storedMetadata.filter((item) =>
-            Boolean(item.MalID && String(item.MalID).trim() !== ""),
+          storedMetadata = storedMetadata.filter(
+            (item) => Boolean(item.MalID && String(item.MalID).trim() !== "")
           );
         } else if (filters.mapping === "unmapped") {
           storedMetadata = storedMetadata.filter(
-            (item) => !item.MalID || String(item.MalID).trim() === "",
+            (item) => !item.MalID || String(item.MalID).trim() === ""
           );
         }
       }
-
       if (filters.source && filters.source !== "All" && filters.source !== "") {
         const targetSource = String(filters.source).toLowerCase();
-        storedMetadata = storedMetadata.filter((item) =>
-          (item.provider || "").toLowerCase().includes(targetSource),
+        storedMetadata = storedMetadata.filter(
+          (item) => (item.provider || "").toLowerCase().includes(targetSource)
         );
       }
-
       if (filters.format && filters.format !== "All" && filters.format !== "") {
         const targetFormat = String(filters.format).toLowerCase();
         storedMetadata = storedMetadata.filter(
-          (item) => (item.type || "").toLowerCase() === targetFormat,
+          (item) => (item.type || "").toLowerCase() === targetFormat
         );
       }
-
       if (filters.status && filters.status !== "All" && filters.status !== "") {
         const targetStatus = String(filters.status).toLowerCase();
         storedMetadata = storedMetadata.filter((item) => {
           const itemStatus = (item.status || "").toLowerCase();
           if (targetStatus === "airing" || targetStatus === "ongoing") {
-            return (
-              itemStatus.includes("airing") || itemStatus.includes("ongoing")
-            );
+            return itemStatus.includes("airing") || itemStatus.includes("ongoing");
           }
           if (targetStatus === "completed" || targetStatus === "finished") {
-            return (
-              itemStatus.includes("completed") ||
-              itemStatus.includes("finished")
-            );
+            return itemStatus.includes("completed") || itemStatus.includes("finished");
           }
           return itemStatus.includes(targetStatus);
         });
       }
-
-      if (
-        filters.malStatus &&
-        filters.malStatus !== "All" &&
-        filters.malStatus !== ""
-      ) {
+      if (filters.malStatus && filters.malStatus !== "All" && filters.malStatus !== "") {
         const targetMalStatus = String(filters.malStatus).toLowerCase();
         storedMetadata = storedMetadata.filter((item) => {
           const mStatus = (item.malStatus || "").toLowerCase();
@@ -1079,30 +868,25 @@ async function getAllMetadata(
           return mStatus === targetMalStatus;
         });
       }
-
       if (filters.season || filters.year) {
-        storedMetadata = storedMetadata.filter((item) =>
-          matchSeasonYearHelper(item.aired, filters.season, filters.year),
+        storedMetadata = storedMetadata.filter(
+          (item) => matchSeasonYearHelper(item.aired, filters.season, filters.year)
         );
       }
     }
-
-    // Pagination logic
     const limit = 15;
     const totalPages = Math.ceil(storedMetadata?.length / limit);
     const startIndex = (page - 1) * limit;
     const paginatedMetadata = storedMetadata.slice(
       startIndex,
-      startIndex + limit,
+      startIndex + limit
     );
     const hasNextPage = page < totalPages;
-
     const updatedMetadata = await Promise.all(
       paginatedMetadata.map(async (metadata) => {
         await migrateLegacyFolderIfNeeded(type, metadata, baseDir);
         let resolvedFolder = metadata.folder_name || "";
         let folderPath = null;
-
         const checkFolderExists = async (folderName) => {
           if (!folderName) return null;
           for (const cDir of candidateDirs) {
@@ -1110,11 +894,11 @@ async function getAllMetadata(
             try {
               await fs.promises.access(p);
               return p;
-            } catch (_) {}
+            } catch (_) {
+            }
           }
           return null;
         };
-
         if (resolvedFolder) {
           folderPath = await checkFolderExists(resolvedFolder);
           if (!folderPath) {
@@ -1129,21 +913,19 @@ async function getAllMetadata(
             }
           }
         }
-
         if (!folderPath && metadata.id) {
           folderPath = await checkFolderExists(metadata.id);
           if (folderPath) {
             resolvedFolder = metadata.id;
           }
         }
-
         if (!folderPath && metadata.title) {
           const baseName = sanitizeFolderName(metadata.title);
           const nameCandidates = [
             baseName,
             `${baseName}_sub`,
             `${baseName}_dub`,
-            `${baseName}_hsub`,
+            `${baseName}_hsub`
           ];
           for (const cand of nameCandidates) {
             folderPath = await checkFolderExists(cand);
@@ -1153,7 +935,6 @@ async function getAllMetadata(
             }
           }
         }
-
         if (!folderPath && metadata.linkedProviders) {
           for (const lp of metadata.linkedProviders) {
             const lpName = lp.folder_name || sanitizeFolderName(lp.title);
@@ -1163,7 +944,7 @@ async function getAllMetadata(
                 lp.id,
                 `${lpName}_sub`,
                 `${lpName}_dub`,
-                `${lpName}_hsub`,
+                `${lpName}_hsub`
               ];
               for (const cand of lpCandidates) {
                 folderPath = await checkFolderExists(cand);
@@ -1176,116 +957,78 @@ async function getAllMetadata(
             if (folderPath) break;
           }
         }
-
         const folderExists = Boolean(folderPath);
-
-        if (
-          !folderExists &&
-          (!metadata.CustomTag || metadata.CustomTag === "") &&
-          (!metadata.MalID || metadata.MalID === "")
-        ) {
+        if (!folderExists && (!metadata.CustomTag || metadata.CustomTag === "") && (!metadata.MalID || metadata.MalID === "")) {
           run(`DELETE FROM ${type} WHERE id = ?`, [metadata.id]);
           return null;
         }
-
         let content = [];
         if (folderExists && folderPath) {
           try {
             const filesAndFolders = await fs.promises.readdir(folderPath, {
-              withFileTypes: true,
+              withFileTypes: true
             });
-
             if (type === "Anime" || type === "Movies") {
-              content = filesAndFolders
-                .filter((file) => file.isFile() && isVideoFile(file.name))
-                .map((file) => getEpisodeNumberFromFilename(file.name))
-                .filter((num) => num !== null && !isNaN(num))
-                .sort((a, b) => a - b);
-              if (
-                type === "Movies" &&
-                content.length === 0 &&
-                filesAndFolders.some(
-                  (file) =>
-                    file.isFile() &&
-                    isVideoFile(file.name) &&
-                    !file.name.startsWith(".") &&
-                    !file.name.includes(".temp"),
-                )
-              ) {
+              content = filesAndFolders.filter((file) => file.isFile() && isVideoFile(file.name)).map((file) => getEpisodeNumberFromFilename(file.name)).filter((num) => num !== null && !isNaN(num)).sort((a, b) => a - b);
+              if (type === "Movies" && content.length === 0 && filesAndFolders.some(
+                (file) => file.isFile() && isVideoFile(file.name) && !file.name.startsWith(".") && !file.name.includes(".temp")
+              )) {
                 content = [1];
               }
             } else if (type === "Manga") {
-              content = filesAndFolders
-                .filter((file) => file.isFile() && isMangaFile(file.name))
-                .map((file) => getChapterNumberFromFilename(file.name))
-                .filter((num) => num !== null && !isNaN(num))
-                .sort((a, b) => a - b);
+              content = filesAndFolders.filter((file) => file.isFile() && isMangaFile(file.name)).map((file) => getChapterNumberFromFilename(file.name)).filter((num) => num !== null && !isNaN(num)).sort((a, b) => a - b);
             }
           } catch (readdirErr) {
             logger.error(
-              `Error reading directory ${folderPath}: ${readdirErr.message}`,
+              `Error reading directory ${folderPath}: ${readdirErr.message}`
             );
           }
         }
-
         let totalEpisodes = metadata.totalEpisodes || 0;
         let watchedEpisodes = metadata.watched || 0;
         let nextEpisodeIn = metadata.nextEpisodeIn || null;
-
         return {
           ...metadata,
           folder_name: resolvedFolder,
           Downloaded: content,
-          totalEpisodes: totalEpisodes,
+          totalEpisodes,
           watched: watchedEpisodes,
-          nextEpisodeIn: nextEpisodeIn,
+          nextEpisodeIn
         };
-      }),
+      })
     );
-
     let finalResults = updatedMetadata.filter(Boolean);
-
     if (tag && tag.toLowerCase() === "downloads") {
       const validResults = [];
       for (const item of updatedMetadata) {
         if (!item) continue;
-        const hasFiles =
-          Array.isArray(item.Downloaded) && item.Downloaded.length > 0;
-        const inQueue =
-          global.isEpisodeInQueue &&
-          (global.isEpisodeInQueue(item.id) ||
-            (item.title && global.isEpisodeInQueue(item.title)));
-
+        const hasFiles = Array.isArray(item.Downloaded) && item.Downloaded.length > 0;
+        const inQueue = global.isEpisodeInQueue && (global.isEpisodeInQueue(item.id) || item.title && global.isEpisodeInQueue(item.title));
         if (hasFiles || inQueue) {
           validResults.push(item);
         }
       }
       finalResults = validResults;
     }
-
     return {
       totalPages,
       currentPage: page,
       hasNextPage,
-      results: finalResults,
+      results: finalResults
     };
   } catch (err) {
     throw new Error(`Error fetching metadata: ${err.message}`);
   }
 }
-
-// Get Local Provider And Info
 async function FetchLocalProviderInfo(type, id) {
   if (!tables[type]) {
     throw new Error(`Invalid table: ${type}`);
   }
-
   try {
     const metadata = await queryOne(`SELECT * FROM ${type} WHERE id = ?`, [id]);
     if (!metadata) {
       throw new Error(`No metadata found for ID: ${id}`);
     }
-
     if (metadata?.genres) {
       try {
         metadata.genres = metadata?.genres?.split(",") ?? [];
@@ -1293,53 +1036,42 @@ async function FetchLocalProviderInfo(type, id) {
         metadata.genres = [];
       }
     }
-
     if (metadata?.EpisodesDataId) {
       metadata.dataId = metadata?.EpisodesDataId;
       delete metadata.EpisodesDataId;
     }
-
     return metadata;
   } catch (err) {
     throw new Error(`Error fetching metadata by ID: ${err.message}`);
   }
 }
-
 async function extractSubtitlesFromVideo(videoPath, epNum) {
   try {
     const ffmpegPath = await getFfmpegPath();
     if (!ffmpegPath) return [];
-
     const parentDir = path.dirname(videoPath);
     const subsDir = path.join(parentDir, "subs");
-
     return new Promise((resolve) => {
       child_process.exec(
         `"${ffmpegPath}" -i "${videoPath}"`,
         (err, stdout, stderr) => {
           const output = stderr || stdout || "";
-          const streamLines = output
-            .split("\n")
-            .filter((line) => line.includes("Subtitle:"));
+          const streamLines = output.split("\n").filter((line) => line.includes("Subtitle:"));
           if (streamLines.length === 0) {
             return resolve([]);
           }
-
           if (!fs.existsSync(subsDir)) {
             fs.mkdirSync(subsDir, { recursive: true });
           }
-
           const promises = streamLines.map((line) => {
             const matchStream = line.match(/Stream #0:(\d+)/);
             if (!matchStream) return Promise.resolve(null);
             const streamIdx = matchStream[1];
-
             let lang = "en";
             const matchLang = line.match(/Stream #0:\d+\(([^)]+)\)/);
             if (matchLang) {
               lang = matchLang[1].slice(0, 3).toLowerCase();
             }
-
             const outFile = path.join(subsDir, `${epNum}Ep.${lang}.vtt`);
             return new Promise((res) => {
               child_process.exec(
@@ -1350,18 +1082,17 @@ async function extractSubtitlesFromVideo(videoPath, epNum) {
                   } else {
                     res({
                       url: `/subtitles?file=${encodeURIComponent(outFile)}`,
-                      lang: lang,
+                      lang
                     });
                   }
-                },
+                }
               );
             });
           });
-
           Promise.all(promises).then((results) => {
             resolve(results.filter(Boolean));
           });
-        },
+        }
       );
     });
   } catch (e) {
@@ -1369,44 +1100,30 @@ async function extractSubtitlesFromVideo(videoPath, epNum) {
     return [];
   }
 }
-
-// Get Local Source By id
 async function getSourceById(type, baseDir, id, number, subdub, season = null) {
-  baseDir =
-    typeof baseDir === "string" && baseDir.trim()
-      ? baseDir
-      : getDownloadsFolder();
+  baseDir = typeof baseDir === "string" && baseDir.trim() ? baseDir : getDownloadsFolder();
   if (!tables[type]) {
     throw new Error(`Invalid table: ${type}`);
   }
-
   if (number == null || String(number).trim() === "" || isNaN(Number(number))) {
     return null;
   }
   const targetNum = Number(number);
-  const targetSeason =
-    season !== null && season !== undefined && !isNaN(Number(season))
-      ? Number(season)
-      : null;
-
+  const targetSeason = season !== null && season !== void 0 && !isNaN(Number(season)) ? Number(season) : null;
   let folder_name = id;
   let malId = null;
   try {
     const metadata = await queryOne(
       `SELECT * FROM ${type} WHERE id = ? OR title = ?`,
-      [id, id],
+      [id, id]
     );
     if (metadata) {
       await migrateLegacyFolderIfNeeded(type, metadata, baseDir);
-      folder_name =
-        metadata.folder_name ||
-        (metadata.title ? sanitizeFolderName(metadata.title) : id);
+      folder_name = metadata.folder_name || (metadata.title ? sanitizeFolderName(metadata.title) : id);
       malId = metadata.MalID;
     }
   } catch (err) {
-    // ignore
   }
-
   try {
     let folderPath = path.join(baseDir, type, folder_name);
     if (type === "Movies" && !fs.existsSync(folderPath)) {
@@ -1419,66 +1136,42 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
         }
       }
     }
-    if (
-      !fs.existsSync(folderPath) &&
-      fs.existsSync(path.join(baseDir, folder_name))
-    ) {
+    if (!fs.existsSync(folderPath) && fs.existsSync(path.join(baseDir, folder_name))) {
       folderPath = path.join(baseDir, folder_name);
     }
     let finalPath = "";
     let fileFound = false;
-
     const searchInFolder = (fPath) => {
       if (!fs.existsSync(fPath)) return null;
       if (type === "Anime" || type === "Movies") {
         const files = fs.readdirSync(fPath);
         const match = files.find((f) => {
-          if (
-            f.startsWith(".") ||
-            f.includes(".temp") ||
-            f.endsWith(".tmp") ||
-            f.endsWith(".part")
-          ) {
+          if (f.startsWith(".") || f.includes(".temp") || f.endsWith(".tmp") || f.endsWith(".part")) {
             return false;
           }
           if (!isVideoFile(f)) return false;
-
           if (targetSeason !== null) {
             const sMatch = f.match(/[Ss](\d+)[Ee](\d+)/);
             if (sMatch) {
               if (Number(sMatch[1]) !== targetSeason) return false;
             } else {
-              const folderSMatch = path
-                .basename(fPath)
-                .match(/^Season\s+(\d+)$/i);
+              const folderSMatch = path.basename(fPath).match(/^Season\s+(\d+)$/i);
               if (folderSMatch && Number(folderSMatch[1]) !== targetSeason) {
                 return false;
               }
             }
           }
-
           const num = getEpisodeNumberFromFilename(f);
           return num !== null && num === targetNum;
         });
-        if (
-          !match &&
-          type === "Movies" &&
-          targetNum === 1 &&
-          (targetSeason === null || targetSeason === 1)
-        ) {
+        if (!match && type === "Movies" && targetNum === 1 && (targetSeason === null || targetSeason === 1)) {
           const validVideos = files.filter(
-            (f) =>
-              !f.startsWith(".") &&
-              !f.includes(".temp") &&
-              !f.endsWith(".tmp") &&
-              !f.endsWith(".part") &&
-              isVideoFile(f) &&
-              !f.match(/[Ss]\d+[Ee]\d+/i),
+            (f) => !f.startsWith(".") && !f.includes(".temp") && !f.endsWith(".tmp") && !f.endsWith(".part") && isVideoFile(f) && !f.match(/[Ss]\d+[Ee]\d+/i)
           );
           if (validVideos.length > 0) {
             const folderBase = path.basename(fPath).toLowerCase();
-            const titleMatch = validVideos.find((v) =>
-              v.toLowerCase().startsWith(folderBase),
+            const titleMatch = validVideos.find(
+              (v) => v.toLowerCase().startsWith(folderBase)
             );
             return path.join(fPath, titleMatch || validVideos[0]);
           }
@@ -1497,7 +1190,6 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
       }
       return null;
     };
-
     let dirsToSearch = [];
     if (targetSeason !== null) {
       const sPadded = String(targetSeason).padStart(2, "0");
@@ -1514,23 +1206,19 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
             if (!dirsToSearch.includes(sp)) dirsToSearch.push(sp);
           }
         }
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
     if (malId) {
       try {
         const linked = await queryAll(
           `SELECT folder_name FROM ${type} WHERE MalID = ?`,
-          [String(malId)],
+          [String(malId)]
         );
-
         linked.forEach((r) => {
           if (r.folder_name && r.folder_name !== folder_name) {
             let p = path.join(baseDir, type, r.folder_name);
-            if (
-              !fs.existsSync(p) &&
-              fs.existsSync(path.join(baseDir, r.folder_name))
-            ) {
+            if (!fs.existsSync(p) && fs.existsSync(path.join(baseDir, r.folder_name))) {
               p = path.join(baseDir, r.folder_name);
             }
             if (!dirsToSearch.includes(p)) {
@@ -1538,13 +1226,13 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
             }
           }
         });
-      } catch (err) {}
+      } catch (err) {
+      }
     } else {
       if (!dirsToSearch.includes(folderPath)) {
         dirsToSearch.push(folderPath);
       }
     }
-
     for (const searchPath of dirsToSearch) {
       const pathFound = searchInFolder(searchPath);
       if (pathFound) {
@@ -1553,7 +1241,6 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
         break;
       }
     }
-
     if (!fileFound) {
       let fileName = null;
       if (type === "Anime" || type === "Movies") {
@@ -1563,24 +1250,42 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
       }
       finalPath = path.join(folderPath, fileName);
     }
-
     const parentDir = path.dirname(finalPath);
     const subtitlesDir = path.join(parentDir, `subs`);
     let subtitleFiles = [];
-
     if (fs.existsSync(subtitlesDir)) {
-      subtitleFiles = fs
-        .readdirSync(subtitlesDir)
-        .filter((file) => {
-          const isSub = isSubtitleFile(file);
-          if (!isSub) return false;
-          const match = file.match(/^(?:ep)?(\d+(?:\.\d+)?)/i);
-          if (match) {
-            return parseFloat(match[1]) === targetNum;
+      subtitleFiles = fs.readdirSync(subtitlesDir).filter((file) => {
+        const isSub = isSubtitleFile(file);
+        if (!isSub) return false;
+        const match = file.match(/^(?:ep)?(\d+(?:\.\d+)?)/i);
+        if (match) {
+          return parseFloat(match[1]) === targetNum;
+        }
+        return false;
+      }).map((subtitle) => {
+        const parts = subtitle.split(".");
+        let lang = "English";
+        if (parts.length >= 3) {
+          const rawLang = parts[parts.length - 2];
+          if (rawLang && rawLang.length <= 4) {
+            lang = rawLang;
           }
-          return false;
-        })
-        .map((subtitle) => {
+        }
+        return {
+          url: `/subtitles?file=${encodeURIComponent(
+            path.join(subtitlesDir, subtitle)
+          )}`,
+          lang
+        };
+      });
+    }
+    if (fs.existsSync(parentDir)) {
+      const videoBaseName = path.parse(finalPath).name;
+      try {
+        const siblingSubs = fs.readdirSync(parentDir).filter((file) => {
+          if (!isSubtitleFile(file)) return false;
+          return file.startsWith(videoBaseName);
+        }).map((subtitle) => {
           const parts = subtitle.split(".");
           let lang = "English";
           if (parts.length >= 3) {
@@ -1591,55 +1296,22 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
           }
           return {
             url: `/subtitles?file=${encodeURIComponent(
-              path.join(subtitlesDir, subtitle),
+              path.join(parentDir, subtitle)
             )}`,
-            lang: lang,
+            lang
           };
         });
-    }
-
-    if (fs.existsSync(parentDir)) {
-      const videoBaseName = path.parse(finalPath).name;
-      try {
-        const siblingSubs = fs
-          .readdirSync(parentDir)
-          .filter((file) => {
-            if (!isSubtitleFile(file)) return false;
-            return file.startsWith(videoBaseName);
-          })
-          .map((subtitle) => {
-            const parts = subtitle.split(".");
-            let lang = "English";
-            if (parts.length >= 3) {
-              const rawLang = parts[parts.length - 2];
-              if (rawLang && rawLang.length <= 4) {
-                lang = rawLang;
-              }
-            }
-            return {
-              url: `/subtitles?file=${encodeURIComponent(
-                path.join(parentDir, subtitle),
-              )}`,
-              lang: lang,
-            };
-          });
-
         for (const s of siblingSubs) {
           if (!subtitleFiles.some((existing) => existing.url === s.url)) {
             subtitleFiles.push(s);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+      }
     }
-
-    if (
-      subtitleFiles.length === 0 &&
-      type === "Anime" &&
-      fs.existsSync(finalPath)
-    ) {
+    if (subtitleFiles.length === 0 && type === "Anime" && fs.existsSync(finalPath)) {
       subtitleFiles = await extractSubtitlesFromVideo(finalPath, targetNum);
     }
-
     let skipTimes = [];
     if (id != null) {
       try {
@@ -1647,172 +1319,150 @@ async function getSourceById(type, baseDir, id, number, subdub, season = null) {
         const cleanNum = Number.isInteger(rawNum) ? Math.trunc(rawNum) : rawNum;
         const row = await queryOne(
           "SELECT skip_times FROM SkipTimes WHERE (anime_id = ? OR anime_id LIKE ?) AND (episode_number = ? OR episode_number = ?) LIMIT 1",
-          [String(id), `${String(id)}-%`, cleanNum, rawNum],
+          [String(id), `${String(id)}-%`, cleanNum, rawNum]
         );
         if (row && row.skip_times) {
           skipTimes = JSON.parse(row.skip_times) || [];
         }
       } catch (e) {
-        // ignore
       }
     }
-
     return {
       filepath: finalPath,
-      subtitleFiles: subtitleFiles,
-      skipTimes: skipTimes,
+      subtitleFiles,
+      skipTimes
     };
   } catch (err) {
     throw new Error(`Error fetching file by ID: ${err.message}`);
   }
 }
-
-// find mapping ids
 async function FindMapping(type, AnimeMangaid, malid, dir) {
   dir = typeof dir === "string" && dir.trim() ? dir : getDownloadsFolder();
   try {
     let data = {};
-
-    // if logged in mal && Anime or Movies
     if (type === "Anime" || type === "Movies") {
       const mainTable = type === "Movies" ? "Movies" : "Anime";
       data.DownloadedEpisodes = [];
       let FoundRow = null;
-
       try {
         if (malid && type === "Anime") {
           FoundRow = await queryOne(
             `SELECT * FROM ${mainTable} WHERE MalID = ? LIMIT 1`,
-            [String(malid)],
+            [String(malid)]
           );
         }
-
         if (!FoundRow) {
           FoundRow = await queryOne(
             `SELECT * FROM ${mainTable} WHERE id = ? OR folder_name = ? OR LOWER(REPLACE(title, ' ', '-')) = LOWER(?) LIMIT 1`,
-            [AnimeMangaid, AnimeMangaid, AnimeMangaid],
+            [AnimeMangaid, AnimeMangaid, AnimeMangaid]
           );
         }
-
         if (!FoundRow) {
           try {
             const histRow = await queryOne(
-              type === "Movies"
-                ? `SELECT title AS media_title FROM SeriesMovieWatchHistory WHERE movie_id = ? LIMIT 1`
-                : `SELECT anime_title AS media_title FROM WatchHistory WHERE anime_id = ? LIMIT 1`,
-              [AnimeMangaid],
+              type === "Movies" ? `SELECT title AS media_title FROM SeriesMovieWatchHistory WHERE movie_id = ? LIMIT 1` : `SELECT anime_title AS media_title FROM WatchHistory WHERE anime_id = ? LIMIT 1`,
+              [AnimeMangaid]
             );
             if (histRow && histRow.media_title) {
               FoundRow = await queryOne(
                 `SELECT * FROM ${mainTable} WHERE LOWER(title) = LOWER(?) LIMIT 1`,
-                [histRow.media_title],
+                [histRow.media_title]
               );
             }
-          } catch (_) {}
+          } catch (_) {
+          }
         }
-
         if (!FoundRow && type === "Anime" && AnimeMangaid) {
           try {
             const customRow = await queryOne(
               "SELECT malid FROM unlinked_mal_ids WHERE id = ? LIMIT 1",
-              [AnimeMangaid],
+              [AnimeMangaid]
             );
             let resolvedMal = customRow?.malid ? String(customRow.malid) : null;
             if (!resolvedMal) {
               resolvedMal = await resolveMalIdFromMapping({
                 id: AnimeMangaid,
                 mediaType: type,
-                installedOnly: true,
+                installedOnly: true
               });
             }
             if (resolvedMal) {
               FoundRow = await queryOne(
                 `SELECT * FROM ${mainTable} WHERE MalID = ? LIMIT 1`,
-                [String(resolvedMal)],
+                [String(resolvedMal)]
               );
               if (FoundRow && !malid) {
                 data.malid = parseInt(resolvedMal);
               }
             }
-          } catch (_) {}
+          } catch (_) {
+          }
         }
-
         if (!FoundRow && AnimeMangaid) {
           try {
             FoundRow = await queryOne(
               `SELECT * FROM ${mainTable} WHERE LOWER(title) = LOWER(?) LIMIT 1`,
-              [AnimeMangaid],
+              [AnimeMangaid]
             );
-          } catch (_) {}
+          } catch (_) {
+          }
         }
-
         if (FoundRow) {
           await migrateLegacyFolderIfNeeded(type, FoundRow, dir);
         }
-
         data.CustomTag = FoundRow?.CustomTag || "";
-
         if (!malid && type === "Anime") {
           data.malid = FoundRow?.MalID ? parseInt(FoundRow.MalID) : null;
           if (!data.malid && FoundRow?.id) {
             const resolvedMalId = await getMalIdFromMapping(
               type,
               FoundRow.provider,
-              FoundRow.id,
+              FoundRow.id
             );
             if (resolvedMalId) {
               data.malid = parseInt(resolvedMalId);
               try {
                 await run("UPDATE Anime SET MalID = ? WHERE id = ?", [
                   String(resolvedMalId),
-                  FoundRow.id,
+                  FoundRow.id
                 ]);
-              } catch (_) {}
+              } catch (_) {
+              }
             }
           }
         } else if (type === "Anime") {
           data.malid = malid;
         }
-
-        // if mal id find in list if it exists
         if (data.malid && global.MalLoggedIn && type === "Anime") {
           let MalInfo = await queryOne(
             `SELECT * FROM MyAnimeList WHERE id = ?`,
-            [String(data.malid)],
+            [String(data.malid)]
           );
-
           if (MalInfo) {
             data = {
               ...data,
-              totalEpisodes:
-                MalInfo.totalEpisodes > 0
-                  ? MalInfo.totalEpisodes
-                  : MalInfo.lastEpisode
-                    ? MalInfo.lastEpisode
-                    : 0,
+              totalEpisodes: MalInfo.totalEpisodes > 0 ? MalInfo.totalEpisodes : MalInfo.lastEpisode ? MalInfo.lastEpisode : 0,
               lastEpisode: MalInfo.lastEpisode ?? null,
               watched: MalInfo.watched ?? 0,
-              status: MalInfo.status ?? "",
+              status: MalInfo.status ?? ""
             };
           }
         }
       } catch (err) {
         logger.error(`[FindMapping DB Error] ${err.message}`);
       }
-
-      // Finding If Its Downloaded
       try {
         let Downloads = [];
         if (data.malid && type === "Anime") {
           Downloads = await queryAll(
             `SELECT * FROM ${mainTable} WHERE MalID = ?`,
-            [String(data.malid)],
+            [String(data.malid)]
           );
         }
         if (Downloads.length === 0) {
           Downloads = await queryAll(
             `SELECT * FROM ${mainTable} WHERE id = ? OR folder_name = ? OR LOWER(REPLACE(title, ' ', '-')) = LOWER(?)`,
-            [AnimeMangaid, AnimeMangaid, AnimeMangaid],
+            [AnimeMangaid, AnimeMangaid, AnimeMangaid]
           );
         }
         if (Downloads.length === 0 && FoundRow) {
@@ -1823,68 +1473,46 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
           const sanitizedDir = path.join(
             dir,
             type,
-            sanitizeFolderName(AnimeMangaid),
+            sanitizeFolderName(AnimeMangaid)
           );
           if (fs.existsSync(directDir) || fs.existsSync(sanitizedDir)) {
             Downloads = [
               {
                 id: AnimeMangaid,
                 title: AnimeMangaid,
-                folder_name: fs.existsSync(directDir)
-                  ? AnimeMangaid
-                  : sanitizeFolderName(AnimeMangaid),
-              },
+                folder_name: fs.existsSync(directDir) ? AnimeMangaid : sanitizeFolderName(AnimeMangaid)
+              }
             ];
           }
         }
-
         if (Downloads?.length > 0) {
-          const mainDownload =
-            Downloads.find(
-              (d) =>
-                d.id === AnimeMangaid ||
-                (d.folder_name && d.folder_name === AnimeMangaid),
-            ) || Downloads[0];
-
+          const mainDownload = Downloads.find(
+            (d) => d.id === AnimeMangaid || d.folder_name && d.folder_name === AnimeMangaid
+          ) || Downloads[0];
           mainDownload.dataId = mainDownload?.EpisodesDataId;
           delete mainDownload.EpisodesDataId;
-
           const baseImage = mainDownload.image_url || null;
-          const baseTitle =
-            mainDownload.title && mainDownload.title.trim() !== ""
-              ? mainDownload.title
-              : formatFallbackTitle(
-                  mainDownload.folder_name || mainDownload.id,
-                );
-
+          const baseTitle = mainDownload.title && mainDownload.title.trim() !== "" ? mainDownload.title : formatFallbackTitle(
+            mainDownload.folder_name || mainDownload.id
+          );
           data = {
             ...mainDownload,
             title: baseTitle,
             image: baseImage,
             DownloadedEpisodes: [],
-            ...data,
+            ...data
           };
-
           for (const SubDub of Downloads) {
             await migrateLegacyFolderIfNeeded(type, SubDub, dir);
-            let folderName =
-              SubDub.folder_name || `${sanitizeFolderName(SubDub.title)}`;
-            const cleanSeriesName = folderName
-              .replace(/[/\\]Season\s*\d+.*$/i, "")
-              .trim();
-            const candidateNames =
-              cleanSeriesName && cleanSeriesName !== folderName
-                ? [cleanSeriesName, folderName]
-                : [folderName];
-
+            let folderName = SubDub.folder_name || `${sanitizeFolderName(SubDub.title)}`;
+            const cleanSeriesName = folderName.replace(/[/\\]Season\s*\d+.*$/i, "").trim();
+            const candidateNames = cleanSeriesName && cleanSeriesName !== folderName ? [cleanSeriesName, folderName] : [folderName];
             let folderPath = null;
             for (const cand of candidateNames) {
               const pathsToTry = [
                 path.join(dir, type, cand),
-                ...(type === "Movies"
-                  ? [path.join(dir, "MoviesSeries", cand)]
-                  : []),
-                path.join(dir, cand),
+                ...type === "Movies" ? [path.join(dir, "MoviesSeries", cand)] : [],
+                path.join(dir, cand)
               ];
               for (const p of pathsToTry) {
                 if (fs.existsSync(p)) {
@@ -1898,22 +1526,15 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
               folderPath = path.join(dir, type, folderName);
             }
             const folderExists = fs.existsSync(folderPath);
-
             if (folderExists) {
               const filesAndFolders = await fs.promises.readdir(folderPath, {
-                withFileTypes: true,
+                withFileTypes: true
               });
-
               const scanned = [];
               for (const file of filesAndFolders) {
-                if (
-                  file.isFile() &&
-                  isVideoFile(file.name) &&
-                  !file.name.startsWith(".") &&
-                  !file.name.includes(".temp")
-                ) {
+                if (file.isFile() && isVideoFile(file.name) && !file.name.startsWith(".") && !file.name.includes(".temp")) {
                   const sMatch = file.name.match(
-                    /\bS(\d{1,3})E(?:p)?(\d+(?:\.\d+)?)/i,
+                    /\bS(\d{1,3})E(?:p)?(\d+(?:\.\d+)?)/i
                   );
                   if (sMatch) {
                     const seasonNum = parseInt(sMatch[1], 10);
@@ -1927,17 +1548,11 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
                   }
                 }
               }
-
-              if (
-                scanned.length === 0 &&
-                filesAndFolders.some((f) => f.isFile() && isVideoFile(f.name))
-              ) {
+              if (scanned.length === 0 && filesAndFolders.some((f) => f.isFile() && isVideoFile(f.name))) {
                 scanned.push(1);
               }
-
-              // Also scan Season NN subdirectories (Media Server format)
               const seasonDirs = filesAndFolders.filter(
-                (f) => f.isDirectory() && SEASON_FOLDER_RE.test(f.name),
+                (f) => f.isDirectory() && SEASON_FOLDER_RE.test(f.name)
               );
               for (const sDir of seasonDirs) {
                 try {
@@ -1945,31 +1560,24 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
                   const seasonNum = sMatch ? parseInt(sMatch[0], 10) : 1;
                   const sDirPath = path.join(folderPath, sDir.name);
                   const sFiles = await fs.promises.readdir(sDirPath, {
-                    withFileTypes: true,
+                    withFileTypes: true
                   });
                   for (const sFile of sFiles) {
-                    if (
-                      sFile.isFile() &&
-                      isVideoFile(sFile.name) &&
-                      !sFile.name.startsWith(".") &&
-                      !sFile.name.includes(".temp")
-                    ) {
+                    if (sFile.isFile() && isVideoFile(sFile.name) && !sFile.name.startsWith(".") && !sFile.name.includes(".temp")) {
                       const epNum = getEpisodeNumberFromFilename(sFile.name);
                       if (epNum !== null && !isNaN(epNum)) {
                         scanned.push(`s${seasonNum}_e${epNum}`);
                       }
                     }
                   }
-                } catch (_) {}
+                } catch (_) {
+                }
               }
-
               data.DownloadedEpisodes = Array.from(
-                new Set([
-                  ...(Array.isArray(data.DownloadedEpisodes)
-                    ? data.DownloadedEpisodes
-                    : []),
-                  ...scanned,
-                ]),
+                /* @__PURE__ */ new Set([
+                  ...Array.isArray(data.DownloadedEpisodes) ? data.DownloadedEpisodes : [],
+                  ...scanned
+                ])
               );
             }
           }
@@ -1981,12 +1589,11 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
       try {
         let downloadsList = [];
         let malIdToUse = malid;
-
         let mainRecord = null;
         if (malIdToUse) {
           mainRecord = await queryOne(
             "SELECT * FROM Manga WHERE MalID = ? LIMIT 1",
-            [String(malIdToUse)],
+            [String(malIdToUse)]
           );
         }
         if (!mainRecord) {
@@ -2004,14 +1611,14 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
             `${AnimeMangaid}%`,
             AnimeMangaid,
             AnimeMangaid,
-            `${AnimeMangaid}%`,
+            `${AnimeMangaid}%`
           ]);
         }
         if (!mainRecord) {
           try {
             const histRow = await queryOne(
               `SELECT manga_title FROM ReadHistory WHERE manga_id = ? LIMIT 1`,
-              [AnimeMangaid],
+              [AnimeMangaid]
             );
             if (histRow && histRow.manga_title) {
               const querySql = `
@@ -2021,98 +1628,74 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
               `;
               mainRecord = await queryOne(querySql, [histRow.manga_title]);
             }
-          } catch (_) {}
+          } catch (_) {
+          }
         }
         if (mainRecord) {
           await migrateLegacyFolderIfNeeded("Manga", mainRecord, dir);
           malIdToUse = mainRecord.MalID || malIdToUse;
         }
-
         if (malIdToUse) {
           downloadsList = await queryAll(
             "SELECT * FROM Manga WHERE MalID = ?",
-            [String(malIdToUse)],
+            [String(malIdToUse)]
           );
         }
         if (downloadsList.length === 0 && mainRecord) {
           downloadsList = [mainRecord];
         }
-
         if (downloadsList.length > 0) {
-          const firstRecord =
-            downloadsList.find(
-              (d) => d.id === AnimeMangaid || d.folder_name === AnimeMangaid,
-            ) || downloadsList[0];
+          const firstRecord = downloadsList.find(
+            (d) => d.id === AnimeMangaid || d.folder_name === AnimeMangaid
+          ) || downloadsList[0];
           const baseImage = firstRecord.image_url || null;
-          const baseTitle =
-            firstRecord.title && firstRecord.title.trim() !== ""
-              ? firstRecord.title
-              : formatFallbackTitle(firstRecord.folder_name || firstRecord.id);
-
+          const baseTitle = firstRecord.title && firstRecord.title.trim() !== "" ? firstRecord.title : formatFallbackTitle(firstRecord.folder_name || firstRecord.id);
           data = {
             ...firstRecord,
             title: baseTitle,
             image: baseImage,
             malid: firstRecord.MalID ? parseInt(firstRecord.MalID) : null,
             CustomTag: firstRecord.CustomTag || "",
-            DownloadedChapters: [],
+            DownloadedChapters: []
           };
-
           if (data.malid && global.MalLoggedIn) {
             try {
               let MalInfo = await queryOne(
                 `SELECT * FROM MyMangaList WHERE id = ?`,
-                [String(data.malid)],
+                [String(data.malid)]
               );
               if (MalInfo) {
                 data = {
                   ...data,
-                  totalChapters:
-                    MalInfo.totalChapters > 0
-                      ? MalInfo.totalChapters
-                      : MalInfo.lastChapter
-                        ? MalInfo.lastChapter
-                        : 0,
+                  totalChapters: MalInfo.totalChapters > 0 ? MalInfo.totalChapters : MalInfo.lastChapter ? MalInfo.lastChapter : 0,
                   lastChapter: MalInfo.lastChapter ?? null,
                   watched: MalInfo.read ?? 0,
-                  status: MalInfo.status ?? "",
+                  status: MalInfo.status ?? ""
                 };
               }
             } catch (err) {
-              // ignore
             }
           }
-
-          const uniqueChapters = new Set();
+          const uniqueChapters = /* @__PURE__ */ new Set();
           for (const dRecord of downloadsList) {
             let folderPath = path.join(dir, type, dRecord.folder_name);
-            if (
-              !fs.existsSync(folderPath) &&
-              fs.existsSync(path.join(dir, dRecord.folder_name))
-            ) {
+            if (!fs.existsSync(folderPath) && fs.existsSync(path.join(dir, dRecord.folder_name))) {
               folderPath = path.join(dir, dRecord.folder_name);
             }
             if (fs.existsSync(folderPath)) {
               const filesAndFolders = await fs.promises.readdir(folderPath, {
-                withFileTypes: true,
+                withFileTypes: true
               });
-
-              filesAndFolders
-                .filter((file) => file.isFile() && isMangaFile(file.name))
-                .map((file) => getChapterNumberFromFilename(file.name))
-                .filter((num) => num !== null && !isNaN(num))
-                .forEach((chNum) => uniqueChapters.add(chNum));
+              filesAndFolders.filter((file) => file.isFile() && isMangaFile(file.name)).map((file) => getChapterNumberFromFilename(file.name)).filter((num) => num !== null && !isNaN(num)).forEach((chNum) => uniqueChapters.add(chNum));
             }
           }
           data.DownloadedChapters = Array.from(uniqueChapters).sort(
-            (a, b) => a - b,
+            (a, b) => a - b
           );
         }
       } catch (err) {
-        // ignore error
       }
     }
-
     return data;
   } catch (err) {
     logger.error(`Error Fetching Mapping`);
@@ -2121,8 +1704,6 @@ async function FindMapping(type, AnimeMangaid, malid, dir) {
     return null;
   }
 }
-
-// Shared MAL cache sync for Anime and Manga
 async function syncMalCache(mediaType, data = []) {
   try {
     if (!data.length) return true;
@@ -2130,39 +1711,24 @@ async function syncMalCache(mediaType, data = []) {
     const tableName = isAnime ? "MyAnimeList" : "MyMangaList";
     const totalCol = isAnime ? "totalEpisodes" : "totalChapters";
     const progCol = isAnime ? "watched" : "read";
-
     const ids = data.map((entry) => entry.id.toString());
-
     const existingEntries = await queryAll(
       `SELECT * FROM ${tableName} WHERE id IN (${ids.map(() => "?").join(",")})`,
-      ids,
+      ids
     );
-
     const existingMap = new Map(
-      existingEntries.map((entry) => [entry.id, entry]),
+      existingEntries.map((entry) => [entry.id, entry])
     );
-
     let notChanged = false;
-
     const operations = [];
     for (const entry of data) {
       const existing = existingMap.get(entry.id.toString());
       const totalVal = parseInt(entry[totalCol] ?? 0);
       const progVal = parseInt(entry[progCol] ?? 0);
-
-      if (
-        existing &&
-        existing.title === entry.title &&
-        existing.image === entry.image &&
-        existing[totalCol] === totalVal &&
-        existing[progCol] === progVal &&
-        existing.status === entry.status &&
-        existing.updated_at === entry.updated_at
-      ) {
+      if (existing && existing.title === entry.title && existing.image === entry.image && existing[totalCol] === totalVal && existing[progCol] === progVal && existing.status === entry.status && existing.updated_at === entry.updated_at) {
         notChanged = true;
         continue;
       }
-
       operations.push({
         sql: `
           INSERT INTO ${tableName} (id, title, image, ${totalCol}, ${progCol}, status, updated_at)
@@ -2182,29 +1748,421 @@ async function syncMalCache(mediaType, data = []) {
           totalVal,
           progVal,
           entry.status,
-          entry.updated_at,
-        ],
+          entry.updated_at
+        ]
       });
     }
-
     if (operations.length > 0) {
       await batchRun("main", operations);
     }
-
     return notChanged;
   } catch (err) {
     logger.error(
-      `Failed To Update ${mediaType === "Anime" ? "MyAnimeList" : "MyMangaList"}`,
+      `Failed To Update ${mediaType === "Anime" ? "MyAnimeList" : "MyMangaList"}`
     );
     logger.error(`Error message: ${err.message}`);
     logger.error(`Stack trace: ${err.stack}`);
     return true;
   }
 }
-
 const MalEpMap = (data = []) => syncMalCache("Anime", data);
 const MalMangaMap = (data = []) => syncMalCache("Manga", data);
-
+const PERSON_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+async function searchPersonWithCache(query) {
+  if (!query || typeof query !== "string") return [];
+  const clean = query.trim().toLowerCase();
+  if (clean.length < 2) return [];
+  const now = Date.now();
+  try {
+    const cachedRow = await queryOne(
+      "SELECT results_json, expires_at FROM keyword_cache WHERE query = ?",
+      [`person:${clean}`]
+    );
+    if (cachedRow && cachedRow.results_json) {
+      if (Number(cachedRow.expires_at) > now) {
+        try {
+          const parsed = JSON.parse(cachedRow.results_json);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch (_) {
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn(`Failed reading keyword_cache for person query "${clean}": ${err.message}`);
+  }
+  let localPeople = [];
+  try {
+    const localRows = await queryAll(
+      "SELECT id, name, department, image, biography, updated_at FROM person_metadata WHERE name LIKE ? ORDER BY updated_at DESC LIMIT 5",
+      [`%${clean}%`]
+    );
+    if (Array.isArray(localRows) && localRows.length > 0) {
+      for (const row of localRows) {
+        const countRow = await queryOne(
+          "SELECT COUNT(*) as count FROM person_credits WHERE person_id = ?",
+          [row.id]
+        );
+        localPeople.push({
+          id: row.id,
+          name: row.name,
+          department: row.department || "Acting",
+          image: row.image || null,
+          biography: row.biography || "",
+          creditCount: countRow?.count || 0,
+          updated_at: row.updated_at
+        });
+      }
+    }
+  } catch (e) {
+    logger.warn(`Local person search error: ${e.message}`);
+  }
+  if (localPeople.length > 0 && localPeople[0].creditCount > 0 && now - (localPeople[0].updated_at || 0) < PERSON_CACHE_TTL_MS) {
+    return localPeople;
+  }
+  const results = [];
+  const seenIds = /* @__PURE__ */ new Set();
+  const http = global.axios || require("axios");
+  let tmdbKey = process.env.TMDB_API_KEY;
+  if (!tmdbKey) {
+    try {
+      const tmdbRow = await queryOne("SELECT value FROM Settings WHERE key = ?", ["tmdb_api_key"]);
+      if (tmdbRow?.value) tmdbKey = tmdbRow.value;
+    } catch (_) {
+    }
+  }
+  if (tmdbKey) {
+    try {
+      const tmdbRes = await http.get(
+        `https://api.themoviedb.org/3/search/person?api_key=${tmdbKey}&query=${encodeURIComponent(clean)}&page=1`,
+        { timeout: 3500 }
+      );
+      if (tmdbRes.data?.results && Array.isArray(tmdbRes.data.results)) {
+        for (const item of tmdbRes.data.results) {
+          const pid = `tmdb:${item.id}`;
+          if (seenIds.has(pid)) continue;
+          seenIds.add(pid);
+          const personObj = {
+            id: pid,
+            name: item.name,
+            department: item.known_for_department || "Acting",
+            image: item.profile_path ? `https://image.tmdb.org/t/p/w200${item.profile_path}` : null,
+            biography: "",
+            creditCount: (item.known_for || []).length,
+            updated_at: now
+          };
+          try {
+            await run(
+              "INSERT OR REPLACE INTO person_metadata (id, name, department, image, biography, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+              [personObj.id, personObj.name, personObj.department, personObj.image, personObj.biography, now]
+            );
+          } catch (_) {
+          }
+          results.push(personObj);
+          if (results.length >= 3) break;
+        }
+      }
+    } catch (_) {
+    }
+  }
+  try {
+    const tvRes = await http.get(
+      `https://api.tvmaze.com/search/people?q=${encodeURIComponent(clean)}`,
+      { timeout: 3500 }
+    );
+    if (Array.isArray(tvRes.data)) {
+      for (const item of tvRes.data) {
+        const p = item?.person;
+        if (!p || !p.id || !p.name) continue;
+        const pid = `tvmaze:${p.id}`;
+        if (seenIds.has(pid)) continue;
+        seenIds.add(pid);
+        const personObj = {
+          id: pid,
+          name: p.name,
+          department: "Acting",
+          image: p.image?.medium || p.image?.original || null,
+          biography: p.birthday ? `Born: ${p.birthday}${p.country?.name ? ` in ${p.country.name}` : ""}` : "",
+          creditCount: 0,
+          updated_at: now
+        };
+        try {
+          await run(
+            "INSERT OR REPLACE INTO person_metadata (id, name, department, image, biography, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            [personObj.id, personObj.name, personObj.department, personObj.image, personObj.biography, now]
+          );
+        } catch (_) {
+        }
+        results.push(personObj);
+        if (results.length >= 5) break;
+      }
+    }
+  } catch (netErr) {
+    logger.warn(`TVMaze person search network error: ${netErr.message}`);
+  }
+  if (results.length > 0) {
+    for (let i = 0; i < Math.min(2, results.length); i++) {
+      try {
+        const credits = await fetchAndSavePersonCredits(results[i].id);
+        results[i].creditCount = credits.length;
+        if (credits.some((c) => c.role && c.role.toLowerCase().includes("director"))) {
+          results[i].department = "Directing";
+          await run("UPDATE person_metadata SET department = ? WHERE id = ?", ["Directing", results[i].id]);
+        }
+      } catch (e) {
+        logger.warn(`Error fetching credits for ${results[i].name}: ${e.message}`);
+      }
+    }
+    try {
+      await run(
+        "INSERT OR REPLACE INTO keyword_cache (query, results_json, cached_at, expires_at) VALUES (?, ?, ?, ?)",
+        [`person:${clean}`, JSON.stringify(results), now, now + PERSON_CACHE_TTL_MS]
+      );
+    } catch (_) {
+    }
+    return results;
+  }
+  if (localPeople.length > 0) {
+    return localPeople;
+  }
+  return [];
+}
+async function fetchAndSavePersonCredits(personId) {
+  if (!personId) return [];
+  const http = global.axios || require("axios");
+  const now = Date.now();
+  const credits = [];
+  const seenMedia = /* @__PURE__ */ new Set();
+  if (personId.startsWith("tmdb:")) {
+    const rawId = personId.replace("tmdb:", "");
+    let tmdbKey = process.env.TMDB_API_KEY;
+    if (!tmdbKey) {
+      try {
+        const row = await queryOne("SELECT value FROM Settings WHERE key = ?", ["tmdb_api_key"]);
+        if (row?.value) tmdbKey = row.value;
+      } catch (_) {
+      }
+    }
+    if (tmdbKey) {
+      try {
+        let personRow = await queryOne("SELECT * FROM person_metadata WHERE id = ?", [personId]);
+        if (!personRow) {
+          try {
+            const pRes = await http.get(
+              `https://api.themoviedb.org/3/person/${rawId}?api_key=${tmdbKey}`,
+              { timeout: 4e3 }
+            );
+            if (pRes.data && pRes.data.name) {
+              await run(
+                "INSERT OR REPLACE INTO person_metadata (id, name, department, image, biography, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                  personId,
+                  pRes.data.name,
+                  pRes.data.known_for_department || "Acting",
+                  pRes.data.profile_path ? `https://image.tmdb.org/t/p/w300${pRes.data.profile_path}` : null,
+                  pRes.data.biography || null,
+                  now
+                ]
+              );
+            }
+          } catch (_) {
+          }
+        }
+        const creditsRes = await http.get(
+          `https://api.themoviedb.org/3/person/${rawId}/combined_credits?api_key=${tmdbKey}`,
+          { timeout: 4e3 }
+        );
+        if (creditsRes.data?.cast && Array.isArray(creditsRes.data.cast)) {
+          for (const item of creditsRes.data.cast) {
+            const mediaId = item.media_type === "tv" ? `tv:${item.id}` : `movie:${item.id}`;
+            if (seenMedia.has(mediaId)) continue;
+            seenMedia.add(mediaId);
+            const title = item.title || item.name;
+            if (!title) continue;
+            const releaseDate = item.release_date || item.first_air_date || "";
+            const year = releaseDate ? parseInt(releaseDate.slice(0, 4), 10) : null;
+            credits.push({
+              person_id: personId,
+              media_id: mediaId,
+              title,
+              media_type: item.media_type || "movie",
+              role: "cast",
+              character: item.character || null,
+              year: isNaN(year) ? null : year,
+              rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : null,
+              poster: item.poster_path ? `https://image.tmdb.org/t/p/w200${item.poster_path}` : null,
+              popularity: item.popularity || 0
+            });
+          }
+        }
+        if (creditsRes.data?.crew && Array.isArray(creditsRes.data.crew)) {
+          for (const item of creditsRes.data.crew) {
+            const mediaId = item.media_type === "tv" ? `tv:${item.id}` : `movie:${item.id}`;
+            const role = item.job ? item.job.toLowerCase() : "crew";
+            if (seenMedia.has(mediaId)) continue;
+            seenMedia.add(mediaId);
+            const title = item.title || item.name;
+            if (!title) continue;
+            const releaseDate = item.release_date || item.first_air_date || "";
+            const year = releaseDate ? parseInt(releaseDate.slice(0, 4), 10) : null;
+            credits.push({
+              person_id: personId,
+              media_id: mediaId,
+              title,
+              media_type: item.media_type || "movie",
+              role,
+              character: null,
+              year: isNaN(year) ? null : year,
+              rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : null,
+              poster: item.poster_path ? `https://image.tmdb.org/t/p/w200${item.poster_path}` : null,
+              popularity: item.popularity || 0
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn(`Error querying TMDB credits for ${personId}: ${err.message}`);
+      }
+    }
+  } else if (personId.startsWith("tvmaze:")) {
+    const rawId = personId.replace("tvmaze:", "");
+    try {
+      let personRow = await queryOne("SELECT * FROM person_metadata WHERE id = ?", [personId]);
+      if (!personRow) {
+        try {
+          const pRes = await http.get(`https://api.tvmaze.com/people/${rawId}`, { timeout: 4e3 });
+          if (pRes.data && pRes.data.name) {
+            await run(
+              "INSERT OR REPLACE INTO person_metadata (id, name, department, image, biography, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+              [
+                personId,
+                pRes.data.name,
+                "Acting",
+                pRes.data.image?.medium || pRes.data.image?.original || null,
+                null,
+                now
+              ]
+            );
+          }
+        } catch (_) {
+        }
+      }
+    } catch (_) {
+    }
+    const [castRes, crewRes] = await Promise.allSettled([
+      http.get(`https://api.tvmaze.com/people/${rawId}/castcredits?embed=show`, { timeout: 4e3 }),
+      http.get(`https://api.tvmaze.com/people/${rawId}/crewcredits?embed=show`, { timeout: 4e3 })
+    ]);
+    if (castRes.status === "fulfilled" && Array.isArray(castRes.value.data)) {
+      for (const item of castRes.value.data) {
+        const show = item?._embedded?.show;
+        if (!show || !show.id || !show.name) continue;
+        const mediaId = `tv:${show.id}`;
+        if (seenMedia.has(mediaId)) continue;
+        seenMedia.add(mediaId);
+        const year = show.premiered ? parseInt(show.premiered.slice(0, 4), 10) : null;
+        const rating = show.rating?.average || 0;
+        const popularity = show.weight || rating * 10;
+        const poster = show.image?.medium || show.image?.original || null;
+        const character = item?._embedded?.character?.name || null;
+        credits.push({
+          person_id: personId,
+          media_id: mediaId,
+          title: show.name,
+          media_type: show.type === "Movie" ? "movie" : "tv",
+          role: "cast",
+          character,
+          year: isNaN(year) ? null : year,
+          rating: rating || null,
+          poster,
+          popularity
+        });
+      }
+    }
+    if (crewRes.status === "fulfilled" && Array.isArray(crewRes.value.data)) {
+      for (const item of crewRes.value.data) {
+        const show = item?._embedded?.show;
+        if (!show || !show.id || !show.name) continue;
+        const mediaId = `tv:${show.id}`;
+        const role = item.type ? item.type.toLowerCase() : "crew";
+        if (seenMedia.has(mediaId)) continue;
+        seenMedia.add(mediaId);
+        const year = show.premiered ? parseInt(show.premiered.slice(0, 4), 10) : null;
+        const rating = show.rating?.average || 0;
+        const popularity = show.weight || rating * 10;
+        const poster = show.image?.medium || show.image?.original || null;
+        credits.push({
+          person_id: personId,
+          media_id: mediaId,
+          title: show.name,
+          media_type: show.type === "Movie" ? "movie" : "tv",
+          role,
+          character: null,
+          year: isNaN(year) ? null : year,
+          rating: rating || null,
+          poster,
+          popularity
+        });
+      }
+    }
+  }
+  if (credits.length > 0) {
+    try {
+      await run("DELETE FROM person_credits WHERE person_id = ?", [personId]);
+      for (const c of credits) {
+        await run(
+          `INSERT INTO person_credits (person_id, media_id, title, media_type, role, character, year, rating, poster, popularity)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [c.person_id, c.media_id, c.title, c.media_type, c.role, c.character, c.year, c.rating, c.poster, c.popularity]
+        );
+      }
+      await run("UPDATE person_metadata SET updated_at = ? WHERE id = ?", [now, personId]);
+    } catch (dbErr) {
+      logger.error(`Error saving person_credits for ${personId}: ${dbErr.message}`);
+    }
+  }
+  credits.sort((a, b) => (b.popularity || 0) - (a.popularity || 0) || (b.year || 0) - (a.year || 0));
+  return credits;
+}
+async function getPersonCreditsWithCache(personId, refresh = false) {
+  if (!personId) return { person: null, credits: [] };
+  const now = Date.now();
+  let person = null;
+  try {
+    person = await queryOne("SELECT * FROM person_metadata WHERE id = ?", [personId]);
+  } catch (e) {
+    logger.warn(`Error querying person_metadata for ${personId}: ${e.message}`);
+  }
+  let credits = [];
+  try {
+    credits = await queryAll(
+      "SELECT * FROM person_credits WHERE person_id = ? ORDER BY popularity DESC, year DESC",
+      [personId]
+    );
+  } catch (e) {
+    logger.warn(`Error querying person_credits for ${personId}: ${e.message}`);
+  }
+  const isExpired = !person?.updated_at || now - Number(person.updated_at) > PERSON_CACHE_TTL_MS;
+  if (credits.length > 0 && !refresh && !isExpired) {
+    return {
+      person: person ? { ...person, creditCount: credits.length } : null,
+      credits
+    };
+  }
+  try {
+    const fetchedCredits = await fetchAndSavePersonCredits(personId);
+    if (fetchedCredits.length > 0) {
+      credits = fetchedCredits;
+    }
+    person = await queryOne("SELECT * FROM person_metadata WHERE id = ?", [personId]);
+  } catch (netErr) {
+    logger.warn(`Could not refresh credits remotely for ${personId}: ${netErr.message}`);
+  }
+  return {
+    person: person ? { ...person, creditCount: credits.length } : null,
+    credits
+  };
+}
 module.exports = {
   MetadataAdd,
   MetadataRemove,
@@ -2217,4 +2175,7 @@ module.exports = {
   formatFallbackTitle,
   getMalIdFromMapping,
   matchSeasonYearHelper,
+  searchPersonWithCache,
+  fetchAndSavePersonCredits,
+  getPersonCreditsWithCache
 };

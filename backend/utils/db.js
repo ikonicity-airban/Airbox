@@ -1,20 +1,15 @@
 const path = require("path");
 const { logger } = require("./AppLogger");
 const { getUserDataPath } = require("./constants");
-
 let channel = null;
 try {
   ({ channel } = require("bridge"));
 } catch (_) {
   channel = null;
 }
-
 const isAndroid = Boolean(
-  channel ||
-  process.env.PLATFORM === "android" ||
-  (process.env.NODEJS_MOBILE_DATA_DIR && !process.versions?.electron),
+  channel || process.env.PLATFORM === "android" || process.env.NODEJS_MOBILE_DATA_DIR && !process.versions?.electron
 );
-
 const tables = {
   Anime: {
     id: "TEXT PRIMARY KEY",
@@ -29,12 +24,12 @@ const tables = {
     image_url: "TEXT",
     last_updated: "DATE",
     MalID: "TEXT",
-    CustomTag: "TEXT",
+    CustomTag: "TEXT"
   },
   SkipTimes: {
     anime_id: "TEXT",
     episode_number: "NUMERIC",
-    skip_times: "TEXT",
+    skip_times: "TEXT"
   },
   Manga: {
     id: "TEXT PRIMARY KEY",
@@ -50,7 +45,7 @@ const tables = {
     image_url: "TEXT",
     last_updated: "DATE",
     MalID: "TEXT",
-    CustomTag: "TEXT",
+    CustomTag: "TEXT"
   },
   Movies: {
     id: "TEXT PRIMARY KEY",
@@ -65,7 +60,7 @@ const tables = {
     image_url: "TEXT",
     last_updated: "DATE",
     CustomTag: "TEXT",
-    episodes_json: "TEXT",
+    episodes_json: "TEXT"
   },
   MyAnimeList: {
     id: "TEXT UNIQUE",
@@ -77,7 +72,7 @@ const tables = {
     status: "TEXT",
     sortOrder: "INTEGER",
     updated_at: "TEXT",
-    NextEpisodeIn: "TEXT",
+    NextEpisodeIn: "TEXT"
   },
   MyMangaList: {
     id: "TEXT UNIQUE",
@@ -88,11 +83,11 @@ const tables = {
     read: "INTEGER",
     status: "TEXT",
     sortOrder: "INTEGER",
-    updated_at: "TEXT",
+    updated_at: "TEXT"
   },
   Settings: {
     key: "TEXT PRIMARY KEY",
-    value: "TEXT",
+    value: "TEXT"
   },
   DownloadQueue: {
     epid: "TEXT PRIMARY KEY",
@@ -108,7 +103,7 @@ const tables = {
     currentSegments: "INTEGER",
     caption: "TEXT",
     added_at: "INTEGER",
-    config: "TEXT",
+    config: "TEXT"
   },
   cookie: {
     id: "TEXT PRIMARY KEY",
@@ -120,7 +115,7 @@ const tables = {
     secure: "TEXT",
     httpOnly: "TEXT",
     expirationDate: "TEXT",
-    local_saved_at: "INTEGER",
+    local_saved_at: "INTEGER"
   },
   WatchHistory: {
     id: "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -134,7 +129,7 @@ const tables = {
     last_watched: "TEXT",
     completed_at: "TEXT",
     hidden: "INTEGER DEFAULT 0",
-    sub_dub: "TEXT",
+    sub_dub: "TEXT"
   },
   SeriesMovieWatchHistory: {
     id: "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -149,7 +144,7 @@ const tables = {
     last_watched: "TEXT",
     completed_at: "TEXT",
     hidden: "INTEGER DEFAULT 0",
-    sub_dub: "TEXT",
+    sub_dub: "TEXT"
   },
   ReadHistory: {
     id: "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -162,27 +157,27 @@ const tables = {
     is_completed: "INTEGER",
     last_read: "TEXT",
     completed_at: "TEXT",
-    hidden: "INTEGER DEFAULT 0",
+    hidden: "INTEGER DEFAULT 0"
   },
   CatboxCache: {
     original_url: "TEXT PRIMARY KEY",
     catbox_url: "TEXT",
-    created_at: "INTEGER",
+    created_at: "INTEGER"
   },
   StreamReferer: {
     domain: "TEXT PRIMARY KEY",
     referer: "TEXT",
-    updatedAt: "INTEGER",
+    updatedAt: "INTEGER"
   },
   unlinked_mal_ids: {
     id: "TEXT PRIMARY KEY",
-    malid: "TEXT",
+    malid: "TEXT"
   },
   ImageCache: {
     url: "TEXT PRIMARY KEY",
     filename: "TEXT",
     file_size: "INTEGER",
-    last_accessed: "INTEGER",
+    last_accessed: "INTEGER"
   },
   DomainConcurrency: {
     domain: "TEXT PRIMARY KEY",
@@ -190,10 +185,36 @@ const tables = {
     max_concurrency: "INTEGER",
     total_requests: "INTEGER DEFAULT 0",
     failed_requests: "INTEGER DEFAULT 0",
-    updated_at: "INTEGER",
+    updated_at: "INTEGER"
   },
+  person_metadata: {
+    id: "TEXT PRIMARY KEY",
+    name: "TEXT NOT NULL",
+    department: "TEXT",
+    image: "TEXT",
+    biography: "TEXT",
+    updated_at: "INTEGER NOT NULL"
+  },
+  person_credits: {
+    id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+    person_id: "TEXT NOT NULL",
+    media_id: "TEXT NOT NULL",
+    title: "TEXT NOT NULL",
+    media_type: "TEXT NOT NULL",
+    role: "TEXT",
+    character: "TEXT",
+    year: "INTEGER",
+    rating: "REAL",
+    poster: "TEXT",
+    popularity: "REAL"
+  },
+  keyword_cache: {
+    query: "TEXT PRIMARY KEY",
+    results_json: "TEXT NOT NULL",
+    cached_at: "INTEGER NOT NULL",
+    expires_at: "INTEGER NOT NULL"
+  }
 };
-
 function flattenParams(params) {
   if (!params) return [];
   if (Array.isArray(params)) {
@@ -204,17 +225,12 @@ function flattenParams(params) {
   }
   return [params];
 }
-
 const getDesktopUserDataPath = getUserDataPath;
-
-// ─── DESKTOP (node:sqlite) STATE & HELPERS ──────────────────────────────────
 let desktopDb = null;
 let desktopMappingDb = null;
-
 function initDesktopDb() {
   const { DatabaseSync } = require("node:sqlite");
   const userDataPath = getUserDataPath();
-
   if (!desktopDb) {
     try {
       desktopDb = new DatabaseSync(path.join(userDataPath, "database.db"));
@@ -229,7 +245,6 @@ function initDesktopDb() {
       logger.error("Failed to initialize Desktop DatabaseSync: " + err.message);
     }
   }
-
   if (!desktopMappingDb) {
     try {
       const mappingPath = path.join(userDataPath, "mapping.db");
@@ -243,12 +258,11 @@ function initDesktopDb() {
       initExtensionDbSystem();
     } catch (err) {
       logger.error(
-        "Failed to initialize Desktop Mapping DatabaseSync: " + err.message,
+        "Failed to initialize Desktop Mapping DatabaseSync: " + err.message
       );
     }
   }
 }
-
 function initExtensionDbSystem() {
   if (!global.mappingDb) return;
   try {
@@ -263,14 +277,10 @@ function initExtensionDbSystem() {
   } catch (err) {
     logger.warn(`Failed to init extension_settings table: ${err.message}`);
   }
-
-  global.getExtensionDb = function (providerName, repoOwner = "TheYogMehta") {
+  global.getExtensionDb = function(providerName, repoOwner = "TheYogMehta") {
     const isOfficial = !repoOwner || repoOwner.toLowerCase() === "theyogmehta";
-    const tableName = isOfficial
-      ? providerName
-      : `@${repoOwner}/${providerName}`;
+    const tableName = isOfficial ? providerName : `@${repoOwner}/${providerName}`;
     const providerKey = tableName;
-
     if (!isOfficial && global.mappingDb) {
       try {
         global.mappingDb.exec(`
@@ -282,20 +292,18 @@ function initExtensionDbSystem() {
             extra TEXT
           );
         `);
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
     return {
       tableName,
       providerKey,
       getSetting: async (key) => {
         if (!global.mappingDb) return null;
         try {
-          const row = await global.mappingDb
-            .prepare(
-              "SELECT value FROM extension_settings WHERE provider = ? AND key = ? LIMIT 1",
-            )
-            .get(providerKey, String(key));
+          const row = await global.mappingDb.prepare(
+            "SELECT value FROM extension_settings WHERE provider = ? AND key = ? LIMIT 1"
+          ).get(providerKey, String(key));
           return row ? row.value : null;
         } catch (_) {
           return null;
@@ -304,23 +312,17 @@ function initExtensionDbSystem() {
       setSetting: async (key, value) => {
         if (!global.mappingDb) return;
         try {
-          await global.mappingDb
-            .prepare(
-              "INSERT OR REPLACE INTO extension_settings (provider, key, value) VALUES (?, ?, ?)",
-            )
-            .run(providerKey, String(key), String(value));
-        } catch (_) {}
+          await global.mappingDb.prepare(
+            "INSERT OR REPLACE INTO extension_settings (provider, key, value) VALUES (?, ?, ?)"
+          ).run(providerKey, String(key), String(value));
+        } catch (_) {
+        }
       },
       prepare: (sql) => {
         if (!global.mappingDb)
           throw new Error("Mapping database not available");
         const lower = String(sql).toLowerCase();
-        if (
-          lower.includes("attach") ||
-          lower.includes("pragma") ||
-          lower.includes("sqlite_master") ||
-          lower.includes("sqlite_schema")
-        ) {
+        if (lower.includes("attach") || lower.includes("pragma") || lower.includes("sqlite_master") || lower.includes("sqlite_schema")) {
           throw new Error("Prohibited database operation in extension query");
         }
         return global.mappingDb.prepare(sql);
@@ -329,24 +331,22 @@ function initExtensionDbSystem() {
         if (!global.mappingDb)
           throw new Error("Mapping database not available");
         return global.mappingDb.exec(sql);
-      },
+      }
     };
   };
 }
-
 function migrateNumericColumns(dbInstance) {
   const checkCol = (tbl, col) => {
     try {
       const cols = dbInstance.prepare(`PRAGMA table_info(${tbl})`).all() || [];
       const found = cols.find(
-        (c) => (c.name || "").toLowerCase() === col.toLowerCase(),
+        (c) => (c.name || "").toLowerCase() === col.toLowerCase()
       );
       return found ? (found.type || "").toUpperCase() : "";
     } catch (_) {
       return "";
     }
   };
-
   if (checkCol("SkipTimes", "episode_number") === "REAL") {
     dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS SkipTimes_new (
@@ -365,7 +365,6 @@ function migrateNumericColumns(dbInstance) {
     `);
     logger.info("[db] Migrated SkipTimes.episode_number from REAL to NUMERIC");
   }
-
   if (checkCol("WatchHistory", "episode_number") === "REAL") {
     dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS WatchHistory_new (
@@ -391,10 +390,9 @@ function migrateNumericColumns(dbInstance) {
       ALTER TABLE WatchHistory_new RENAME TO WatchHistory;
     `);
     logger.info(
-      "[db] Migrated WatchHistory.episode_number from REAL to NUMERIC",
+      "[db] Migrated WatchHistory.episode_number from REAL to NUMERIC"
     );
   }
-
   if (checkCol("ReadHistory", "chapter_number") === "REAL") {
     dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS ReadHistory_new (
@@ -419,52 +417,45 @@ function migrateNumericColumns(dbInstance) {
       ALTER TABLE ReadHistory_new RENAME TO ReadHistory;
     `);
     logger.info(
-      "[db] Migrated ReadHistory.chapter_number from REAL to NUMERIC",
+      "[db] Migrated ReadHistory.chapter_number from REAL to NUMERIC"
     );
   }
 }
-
 function initDesktopTables() {
   if (!desktopDb) return;
   for (const [tableName, columns] of Object.entries(tables)) {
-    const columnsString = Object.entries(columns)
-      .map(([col, def]) => `${col} ${def}`)
-      .join(", ");
+    const columnsString = Object.entries(columns).map(([col, def]) => `${col} ${def}`).join(", ");
     try {
       desktopDb.exec(
-        `CREATE TABLE IF NOT EXISTS ${tableName} (${columnsString})`,
+        `CREATE TABLE IF NOT EXISTS ${tableName} (${columnsString})`
       );
       updateTableSchema(tableName, columns, desktopDb);
     } catch (error) {
       logger.error(`Error creating table ${tableName}: ${error.message}`);
     }
   }
-
   try {
     migrateNumericColumns(desktopDb);
   } catch (migErr) {
     logger.error(
-      "[db] Failed to migrate numeric history/skiptimes columns: " +
-        migErr.message,
+      "[db] Failed to migrate numeric history/skiptimes columns: " + migErr.message
     );
   }
-
   try {
     desktopDb.exec(
-      "CREATE UNIQUE INDEX IF NOT EXISTS idx_skiptimes_anime_ep ON SkipTimes (anime_id, episode_number)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_skiptimes_anime_ep ON SkipTimes (anime_id, episode_number)"
     );
   } catch (e) {
     logger.error("Failed to create unique index on SkipTimes: " + e.message);
   }
-
   try {
     desktopDb.exec(`
       UPDATE SkipTimes SET episode_number = CAST(episode_number AS INTEGER) WHERE episode_number = CAST(episode_number AS INTEGER);
       UPDATE WatchHistory SET episode_number = CAST(episode_number AS INTEGER) WHERE episode_number = CAST(episode_number AS INTEGER);
       UPDATE ReadHistory SET chapter_number = CAST(chapter_number AS INTEGER) WHERE chapter_number = CAST(chapter_number AS INTEGER);
     `);
-  } catch (_) {}
-
+  } catch (_) {
+  }
   try {
     desktopDb.exec(`
       INSERT OR IGNORE INTO Movies (id, folder_name, title, type, provider, description, status, genres, aired, image_url, last_updated, MalID, CustomTag)
@@ -483,68 +474,52 @@ function initDesktopTables() {
       DELETE FROM WatchHistory
       WHERE anime_id LIKE 'tv:%' OR anime_id LIKE 'movie:%';
     `);
-  } catch (_) {}
-
+  } catch (_) {
+  }
   try {
-    const watchDeleted = desktopDb
-      .prepare(
-        "DELETE FROM WatchHistory WHERE anime_id NOT IN (SELECT id FROM Anime)",
-      )
-      .run();
-    const movieWatchDeleted = desktopDb
-      .prepare(
-        "DELETE FROM SeriesMovieWatchHistory WHERE movie_id NOT IN (SELECT id FROM Movies)",
-      )
-      .run();
-    const readDeleted = desktopDb
-      .prepare(
-        "DELETE FROM ReadHistory WHERE manga_id NOT IN (SELECT id FROM Manga)",
-      )
-      .run();
-    const skipDeleted = desktopDb
-      .prepare(
-        "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)",
-      )
-      .run();
-    const changes =
-      (watchDeleted?.changes || 0) +
-      (movieWatchDeleted?.changes || 0) +
-      (readDeleted?.changes || 0) +
-      (skipDeleted?.changes || 0);
+    const watchDeleted = desktopDb.prepare(
+      "DELETE FROM WatchHistory WHERE anime_id NOT IN (SELECT id FROM Anime)"
+    ).run();
+    const movieWatchDeleted = desktopDb.prepare(
+      "DELETE FROM SeriesMovieWatchHistory WHERE movie_id NOT IN (SELECT id FROM Movies)"
+    ).run();
+    const readDeleted = desktopDb.prepare(
+      "DELETE FROM ReadHistory WHERE manga_id NOT IN (SELECT id FROM Manga)"
+    ).run();
+    const skipDeleted = desktopDb.prepare(
+      "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)"
+    ).run();
+    const changes = (watchDeleted?.changes || 0) + (movieWatchDeleted?.changes || 0) + (readDeleted?.changes || 0) + (skipDeleted?.changes || 0);
     if (changes > 0) {
       logger.info(
-        `Database cleanup: Deleted ${watchDeleted?.changes || 0} orphaned watch history, ${movieWatchDeleted?.changes || 0} movie watch history, ${readDeleted?.changes || 0} read history, and ${skipDeleted?.changes || 0} skip times entries.`,
+        `Database cleanup: Deleted ${watchDeleted?.changes || 0} orphaned watch history, ${movieWatchDeleted?.changes || 0} movie watch history, ${readDeleted?.changes || 0} read history, and ${skipDeleted?.changes || 0} skip times entries.`
       );
     }
-  } catch (_) {}
+  } catch (_) {
+  }
+  try {
+    desktopDb.exec(`
+      CREATE INDEX IF NOT EXISTS idx_person_credits_person_id ON person_credits (person_id);
+      CREATE INDEX IF NOT EXISTS idx_person_credits_popularity ON person_credits (popularity DESC);
+      CREATE INDEX IF NOT EXISTS idx_person_metadata_name ON person_metadata (name COLLATE NOCASE);
+      CREATE INDEX IF NOT EXISTS idx_keyword_cache_expires_at ON keyword_cache (expires_at);
+    `);
+  } catch (e) {
+    logger.error("Failed to create person indexes: " + e.message);
+  }
 }
-
-// ─── UNIFIED SCHEMA UPDATER ──────────────────────────────────────────────────
-async function updateTableSchema(
-  tableName,
-  expectedColumns,
-  dbInstance = null,
-) {
+async function updateTableSchema(tableName, expectedColumns, dbInstance = null) {
   try {
     let existingNames = [];
     if (dbInstance) {
-      const cols =
-        dbInstance.prepare(`PRAGMA table_info(${tableName})`).all() || [];
-      existingNames = cols
-        .map((col) => (col.name || col.NAME || "").toLowerCase().trim())
-        .filter(Boolean);
+      const cols = dbInstance.prepare(`PRAGMA table_info(${tableName})`).all() || [];
+      existingNames = cols.map((col) => (col.name || col.NAME || "").toLowerCase().trim()).filter(Boolean);
     } else {
-      const cols = (await queryAll(`PRAGMA table_info(${tableName})`)) || [];
-      existingNames = cols
-        .map((col) => (col.name || col.NAME || "").toLowerCase().trim())
-        .filter(Boolean);
+      const cols = await queryAll(`PRAGMA table_info(${tableName})`) || [];
+      existingNames = cols.map((col) => (col.name || col.NAME || "").toLowerCase().trim()).filter(Boolean);
     }
-
     for (const [col, definition] of Object.entries(expectedColumns)) {
-      if (
-        typeof definition === "string" &&
-        definition.toUpperCase().includes("PRIMARY KEY")
-      ) {
+      if (typeof definition === "string" && definition.toUpperCase().includes("PRIMARY KEY")) {
         continue;
       }
       if (!existingNames.includes(col.toLowerCase().trim())) {
@@ -560,11 +535,8 @@ async function updateTableSchema(
     logger.error(`Error updating schema for ${tableName}: ${error.message}`);
   }
 }
-
-// ─── ANDROID (Java bridge) COMMUNICATION ────────────────────────────────────
-const pendingRequests = new Map();
+const pendingRequests = /* @__PURE__ */ new Map();
 let requestCounter = 0;
-
 if (channel) {
   channel.addListener("db-response", (response) => {
     if (!response || typeof response.requestId === "undefined") return;
@@ -579,7 +551,6 @@ if (channel) {
     }
   });
 }
-
 function dbRequest(eventName, data) {
   return new Promise((resolve, reject) => {
     if (!channel) {
@@ -590,10 +561,9 @@ function dbRequest(eventName, data) {
     const timeout = setTimeout(() => {
       pendingRequests.delete(requestId);
       reject(
-        new Error(`Database request timeout (${eventName}, id=${requestId})`),
+        new Error(`Database request timeout (${eventName}, id=${requestId})`)
       );
-    }, 30000);
-
+    }, 3e4);
     pendingRequests.set(requestId, {
       resolve: (result) => {
         clearTimeout(timeout);
@@ -602,24 +572,20 @@ function dbRequest(eventName, data) {
       reject: (err) => {
         clearTimeout(timeout);
         reject(err);
-      },
+      }
     });
-
     channel.send(eventName, { requestId, ...data });
   });
 }
-
-// ─── MAPPING TABLE CACHE ─────────────────────────────────────────────────────
-const mappingTablesCache = new Set();
+const mappingTablesCache = /* @__PURE__ */ new Set();
 let lastMappingTablesCheck = 0;
-
 async function refreshMappingTables() {
   if (!isAndroid) return;
   try {
     const result = await dbRequest("db-query-all", {
       db: "mapping",
       sql: "SELECT name FROM sqlite_master WHERE type='table'",
-      params: [],
+      params: []
     });
     const rows = result.rows || [];
     mappingTablesCache.clear();
@@ -627,17 +593,13 @@ async function refreshMappingTables() {
       if (r.name) mappingTablesCache.add(r.name.toLowerCase());
     }
     lastMappingTablesCheck = Date.now();
-  } catch (_) {}
+  } catch (_) {
+  }
 }
-
-// ─── UNIFIED EXECUTION ENGINE ────────────────────────────────────────────────
 async function executeDb(dbName, action, sql, params = []) {
   if (dbName === "mapping") {
     if (isAndroid) {
-      if (
-        Date.now() - lastMappingTablesCheck > 10000 ||
-        mappingTablesCache.size === 0
-      ) {
+      if (Date.now() - lastMappingTablesCheck > 1e4 || mappingTablesCache.size === 0) {
         await refreshMappingTables();
       }
       if (mappingTablesCache.size === 0) {
@@ -647,44 +609,35 @@ async function executeDb(dbName, action, sql, params = []) {
       return action === "all" ? [] : null;
     }
   }
-
   const tag = dbName === "mapping" ? "Mapping" : "Database";
   const flat = flattenParams(params);
-
   if (isAndroid) {
     const eventMap = {
       all: "db-query-all",
       one: "db-query-one",
       run: "db-run",
-      exec: "db-exec",
+      exec: "db-exec"
     };
     try {
       const res = await dbRequest(eventMap[action], {
         db: dbName,
         sql,
-        params: action === "exec" ? [] : flat,
+        params: action === "exec" ? [] : flat
       });
       if (action === "all") return res.rows || [];
       if (action === "one") return res.row || null;
       return res;
     } catch (e) {
-      if (
-        dbName === "mapping" &&
-        (e.message?.includes("no such table") ||
-          e.message?.includes("no such column"))
-      ) {
+      if (dbName === "mapping" && (e.message?.includes("no such table") || e.message?.includes("no such column"))) {
         return action === "all" ? [] : null;
       }
       logger.error(`${tag} ${action} error on "${sql}": ${e.message}`);
       throw e;
     }
   }
-
-  // Desktop (node:sqlite)
   try {
     const db = dbName === "mapping" ? global.mappingDb : global.db;
     if (!db) return action === "all" ? [] : null;
-
     if (action === "exec") {
       return db.exec(sql);
     }
@@ -693,53 +646,39 @@ async function executeDb(dbName, action, sql, params = []) {
     if (action === "one") return stmt.get(...flat) || null;
     if (action === "run") return stmt.run(...flat);
   } catch (e) {
-    if (
-      dbName === "mapping" &&
-      (e.message?.includes("no such table") ||
-        e.message?.includes("no such column"))
-    ) {
+    if (dbName === "mapping" && (e.message?.includes("no such table") || e.message?.includes("no such column"))) {
       return action === "all" ? [] : null;
     }
     logger.error(`${tag} ${action} error on "${sql}": ${e.message}`);
     throw e;
   }
 }
-
-// ─── PUBLIC QUERY API ────────────────────────────────────────────────────────
 const queryAll = (sql, params) => executeDb("main", "all", sql, params);
 const queryOne = (sql, params) => executeDb("main", "one", sql, params);
 const run = (sql, params) => executeDb("main", "run", sql, params);
 const exec = (sql) => executeDb("main", "exec", sql);
-
-const mappingQueryAll = (sql, params) =>
-  executeDb("mapping", "all", sql, params);
-const mappingQueryOne = (sql, params) =>
-  executeDb("mapping", "one", sql, params);
+const mappingQueryAll = (sql, params) => executeDb("mapping", "all", sql, params);
+const mappingQueryOne = (sql, params) => executeDb("mapping", "one", sql, params);
 const mappingRun = (sql, params) => executeDb("mapping", "run", sql, params);
 const mappingExec = (sql) => executeDb("mapping", "exec", sql);
-
 function createDbAdapter(dbName) {
   return {
     prepare(sql) {
       return {
         get: (...params) => executeDb(dbName, "one", sql, params),
         all: (...params) => executeDb(dbName, "all", sql, params),
-        run: (...params) => executeDb(dbName, "run", sql, params),
+        run: (...params) => executeDb(dbName, "run", sql, params)
       };
     },
-    exec: (sql) => executeDb(dbName, "exec", sql),
+    exec: (sql) => executeDb(dbName, "exec", sql)
   };
 }
-
-// ─── BOOT INITIALIZATION ─────────────────────────────────────────────────────
 if (isAndroid) {
   global.db = createDbAdapter("main");
   global.mappingDb = createDbAdapter("mapping");
 } else {
   initDesktopDb();
 }
-
-// ─── PRAGMA, TRANSACTIONS & KEY-VALUE ────────────────────────────────────────
 async function pragma(sql, dbName = "main") {
   if (isAndroid) {
     try {
@@ -751,32 +690,21 @@ async function pragma(sql, dbName = "main") {
   }
   try {
     const targetDb = dbName === "mapping" ? global.mappingDb : global.db;
-    return targetDb
-      ? targetDb.exec(
-          sql.toUpperCase().startsWith("PRAGMA") ? sql : `PRAGMA ${sql}`,
-        )
-      : null;
+    return targetDb ? targetDb.exec(
+      sql.toUpperCase().startsWith("PRAGMA") ? sql : `PRAGMA ${sql}`
+    ) : null;
   } catch (e) {
     logger.error(`Database pragma error on "${sql}": ${e.message}`);
     throw e;
   }
 }
-
 function unwrapJson(val) {
-  if (val === undefined || val === null) return val;
+  if (val === void 0 || val === null) return val;
   let curr = val;
   let maxDepth = 10;
   while (typeof curr === "string" && maxDepth-- > 0) {
     const trimmed = curr.trim();
-    if (
-      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
-      trimmed === "true" ||
-      trimmed === "false" ||
-      trimmed === "null" ||
-      (!isNaN(Number(trimmed)) && trimmed !== "")
-    ) {
+    if (trimmed.startsWith('"') && trimmed.endsWith('"') || trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]") || trimmed === "true" || trimmed === "false" || trimmed === "null" || !isNaN(Number(trimmed)) && trimmed !== "") {
       try {
         const parsed = JSON.parse(trimmed);
         curr = parsed;
@@ -789,33 +717,30 @@ function unwrapJson(val) {
   }
   return curr;
 }
-
 async function getKeyValue(tableName, key) {
   try {
     const row = await queryOne(`SELECT value FROM ${tableName} WHERE key = ?`, [
-      key,
+      key
     ]);
-    if (!row || row.value === undefined || row.value === null) return null;
+    if (!row || row.value === void 0 || row.value === null) return null;
     return unwrapJson(row.value);
   } catch {
     return null;
   }
 }
-
 async function setKeyValue(tableName, key, value) {
   try {
     const cleanValue = unwrapJson(value);
     await run(
       `INSERT INTO ${tableName} (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      [key, JSON.stringify(cleanValue)],
+      [key, JSON.stringify(cleanValue)]
     );
   } catch (e) {
     logger.error(
-      `Error writing key ${key} to SQLite table ${tableName}: ${e.message}`,
+      `Error writing key ${key} to SQLite table ${tableName}: ${e.message}`
     );
   }
 }
-
 async function batchRun(dbNameOrOps, maybeOps) {
   let dbName = "main";
   let operations = dbNameOrOps;
@@ -824,7 +749,6 @@ async function batchRun(dbNameOrOps, maybeOps) {
     operations = maybeOps;
   }
   if (!operations || operations.length === 0) return;
-
   if (isAndroid) {
     try {
       return await dbRequest("db-batch-run", { db: dbName, operations });
@@ -833,7 +757,6 @@ async function batchRun(dbNameOrOps, maybeOps) {
       throw e;
     }
   }
-
   const dbInstance = dbName === "mapping" ? global.mappingDb : global.db;
   if (!dbInstance) return;
   dbInstance.prepare("BEGIN").run();
@@ -846,16 +769,15 @@ async function batchRun(dbNameOrOps, maybeOps) {
   } catch (e) {
     try {
       dbInstance.prepare("ROLLBACK").run();
-    } catch (_) {}
+    } catch (_) {
+    }
     logger.error(`Database batchRun error on ${dbName}: ${e.message}`);
     throw e;
   }
 }
-
 async function mappingBatchRun(operations) {
   return batchRun("mapping", operations);
 }
-
 async function closeDb(dbName = "main") {
   if (isAndroid) {
     try {
@@ -874,7 +796,8 @@ async function closeDb(dbName = "main") {
       global.mappingDb = null;
       try {
         require("./mappingResolver").invalidateMappingMetadataCache();
-      } catch (_) {}
+      } catch (_) {
+      }
     } else {
       if (desktopDb && typeof desktopDb.close === "function") {
         desktopDb.close();
@@ -886,7 +809,6 @@ async function closeDb(dbName = "main") {
     logger.error(`Failed to close database ${dbName}: ${e.message}`);
   }
 }
-
 async function openDb(dbName = "main") {
   if (isAndroid) {
     try {
@@ -898,31 +820,22 @@ async function openDb(dbName = "main") {
   }
   initDesktopDb();
 }
-
 async function initDatabase() {
   if (!isAndroid) {
     initDesktopDb();
     logger.info("[db] Desktop SQLite database ready");
     return;
   }
-
   logger.info("[db] Initializing Android database schema via Java bridge...");
   try {
-    // Java DatabaseBridge.handleInit requires dataDir (StrawVerse root;
-    // it appends "/data" itself). Without it db-init fails and every
-    // CREATE TABLE below throws "Database 'main' is not open".
-    const root =
-      process.env.NODEJS_MOBILE_DATA_DIR || process.env.DATADIR || null;
+    const root = process.env.NODEJS_MOBILE_DATA_DIR || process.env.DATADIR || null;
     await dbRequest("db-init", root ? { dataDir: root } : {});
   } catch (e) {
     logger.error("Failed to send db-init to bridge: " + e.message);
     throw new Error(`Database bridge init failed: ${e.message}`);
   }
-
   for (const [tableName, columns] of Object.entries(tables)) {
-    const columnsString = Object.entries(columns)
-      .map(([col, def]) => `${col} ${def}`)
-      .join(", ");
+    const columnsString = Object.entries(columns).map(([col, def]) => `${col} ${def}`).join(", ");
     try {
       await exec(`CREATE TABLE IF NOT EXISTS ${tableName} (${columnsString})`);
       await updateTableSchema(tableName, columns);
@@ -930,15 +843,13 @@ async function initDatabase() {
       throw new Error(`Error creating table ${tableName}: ${error.message}`);
     }
   }
-
   try {
     await exec(
-      "CREATE UNIQUE INDEX IF NOT EXISTS idx_skiptimes_anime_ep ON SkipTimes (anime_id, episode_number)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_skiptimes_anime_ep ON SkipTimes (anime_id, episode_number)"
     );
   } catch (e) {
     logger.error("Failed to create unique index on SkipTimes: " + e.message);
   }
-
   try {
     await exec(`
       INSERT OR IGNORE INTO Movies (id, folder_name, title, type, provider, description, status, genres, aired, image_url, last_updated, MalID, CustomTag)
@@ -957,20 +868,20 @@ async function initDatabase() {
       DELETE FROM WatchHistory
       WHERE anime_id LIKE 'tv:%' OR anime_id LIKE 'movie:%';
     `);
-  } catch (_) {}
-
+  } catch (_) {
+  }
   try {
     const watchDeleted = await run(
-      "DELETE FROM WatchHistory WHERE anime_id NOT IN (SELECT id FROM Anime)",
+      "DELETE FROM WatchHistory WHERE anime_id NOT IN (SELECT id FROM Anime)"
     );
     const movieWatchDeleted = await run(
-      "DELETE FROM SeriesMovieWatchHistory WHERE movie_id NOT IN (SELECT id FROM Movies)",
+      "DELETE FROM SeriesMovieWatchHistory WHERE movie_id NOT IN (SELECT id FROM Movies)"
     );
     const readDeleted = await run(
-      "DELETE FROM ReadHistory WHERE manga_id NOT IN (SELECT id FROM Manga)",
+      "DELETE FROM ReadHistory WHERE manga_id NOT IN (SELECT id FROM Manga)"
     );
     const skipDeleted = await run(
-      "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)",
+      "DELETE FROM SkipTimes WHERE anime_id NOT IN (SELECT id FROM Anime)"
     );
     await exec(`
       UPDATE SkipTimes SET episode_number = CAST(episode_number AS INTEGER) WHERE episode_number = CAST(episode_number AS INTEGER);
@@ -978,23 +889,17 @@ async function initDatabase() {
       UPDATE SeriesMovieWatchHistory SET episode_number = CAST(episode_number AS INTEGER) WHERE episode_number = CAST(episode_number AS INTEGER);
       UPDATE ReadHistory SET chapter_number = CAST(chapter_number AS INTEGER) WHERE chapter_number = CAST(chapter_number AS INTEGER);
     `);
-    const totalChanges =
-      (watchDeleted?.changes || 0) +
-      (movieWatchDeleted?.changes || 0) +
-      (readDeleted?.changes || 0) +
-      (skipDeleted?.changes || 0);
+    const totalChanges = (watchDeleted?.changes || 0) + (movieWatchDeleted?.changes || 0) + (readDeleted?.changes || 0) + (skipDeleted?.changes || 0);
     if (totalChanges > 0) {
       logger.info(
-        `Database cleanup: Deleted ${watchDeleted?.changes || 0} orphaned watch history, ${readDeleted?.changes || 0} read history, and ${skipDeleted?.changes || 0} skip times entries.`,
+        `Database cleanup: Deleted ${watchDeleted?.changes || 0} orphaned watch history, ${readDeleted?.changes || 0} read history, and ${skipDeleted?.changes || 0} skip times entries.`
       );
     }
   } catch (e) {
     logger.error("Failed to run database history cleanup: " + e.message);
   }
-
   logger.info("[db] Android database initialization complete");
 }
-
 module.exports = {
   tables,
   initDatabase,
@@ -1016,5 +921,5 @@ module.exports = {
   unwrapJson,
   getUserDataPath,
   getDesktopUserDataPath,
-  executeDb,
+  executeDb
 };

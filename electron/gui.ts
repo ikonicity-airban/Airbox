@@ -1,0 +1,1259 @@
+// suppress node:sqlite experimental warning (intentional use)
+process.removeAllListeners("warning");
+process.on("warning", (w) => {
+  if (w.name !== "ExperimentalWarning") console.warn(w);
+});
+
+try {
+  const dns = require("node:dns");
+  if (dns && typeof dns.setDefaultResultOrder === "function") {
+    dns.setDefaultResultOrder("ipv4first");
+  }
+} catch (_) {}
+
+function makeStreamSafe(stream) {
+  if (!stream) return;
+  if (typeof stream.on === "function") {
+    stream.on("error", (err) => {
+      if (err && (err.code === "EIO" || err.code === "EPIPE")) return;
+    });
+  }
+  if (typeof stream.write === "function") {
+    const originalWrite = stream.write.bind(stream);
+    stream.write = function (chunk, encoding, callback) {
+      try {
+        return originalWrite(chunk, encoding, (err) => {
+          if (err && (err.code === "EIO" || err.code === "EPIPE")) {
+            if (typeof callback === "function") callback();
+            return;
+          }
+          if (typeof callback === "function") callback(err);
+        });
+      } catch (err) {
+        if (err && (err.code === "EIO" || err.code === "EPIPE")) {
+          if (typeof callback === "function") callback();
+          return false;
+        }
+        throw err;
+      }
+    };
+  }
+}
+
+makeStreamSafe(process.stdout);
+makeStreamSafe(process.stderr);
+if (console && (console as any)._stdout) makeStreamSafe((console as any)._stdout);
+if (console && (console as any)._stderr) makeStreamSafe((console as any)._stderr);
+
+process.on("uncaughtException", (err: any) => {
+  if (err && (err.code === "EIO" || err.code === "EPIPE")) return;
+  console.error("Uncaught Exception:", err);
+});
+
+// electron
+const {
+  app,
+  BrowserWindow,
+  nativeTheme,
+  Menu,
+  globalShortcut,
+  powerSaveBlocker,
+  dialog,
+  Notification,
+  ipcMain,
+  protocol,
+  shell,
+  session,
+} = require("electron");
+try {
+  app.setName("Airbox");
+} catch (_) {}
+const { autoUpdater } = require("electron-updater");
+const { exec } = require("child_process");
+const express = require("express");
+const path = require("node:path");
+const net = require("net");
+const fs = require("fs");
+const os = require("node:os");
+const Module = require("module");
+const electronNodeModules = path.join(__dirname, "node_modules");
+if (!Module.globalPaths.includes(electronNodeModules)) {
+  Module.globalPaths.push(electronNodeModules);
+}
+const origNodeModulePaths = Module._nodeModulePaths;
+if (typeof origNodeModulePaths === "function") {
+  Module._nodeModulePaths = function (from) {
+    const paths = origNodeModulePaths.call(this, from);
+    if (!paths.includes(electronNodeModules)) {
+      paths.push(electronNodeModules);
+    }
+    return paths;
+  };
+}
+const origResolve = Module._resolveFilename;
+Module._resolveFilename = function (request, parent, isMain) {
+  try {
+    return origResolve.call(this, request, parent, isMain);
+  } catch (err) {
+    if (
+      err.code === "MODULE_NOT_FOUND" &&
+      !path.isAbsolute(request) &&
+      !request.startsWith(".")
+    ) {
+      try {
+        return require.resolve(request, { paths: [__dirname] });
+      } catch (_) {}
+    }
+    throw err;
+  }
+};
+
+const lastStatusCache = new Map();
+
+global.sendToRenderer = function (channel, payload) {
+  if (channel === "download-logger") {
+    global.__latestDownloadProgress = payload;
+  }
+
+  if (
+    channel === "info-loading-status" ||
+    channel === "catalog-loading-status" ||
+    channel === "download-logger"
+  ) {
+    if (payload && payload.text) {
+      lastStatusCache.set(channel, payload);
+    } else {
+      lastStatusCache.delete(channel);
+    }
+  }
+
+  if (global.win && !global.win.isDestroyed() && global.win.webContents) {
+    try {
+      global.win.webContents.send(channel, payload);
+    } catch (err) {
+      console.error(`[IPC Send Error] Channel ${channel}:`, err.message);
+    }
+  }
+};
+
+const backendDir = fs.existsSync(path.join(__dirname, "backend"))
+  ? path.join(__dirname, "backend")
+  : path.join(__dirname, "..", "backend");
+
+const { logger } = require(path.join(backendDir, "utils", "AppLogger"));
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on("second-instance", (event, commandLine) => {
+  logger.info(
+    "[Protocol] second-instance triggered. Command line: " +
+      JSON.stringify(commandLine),
+  );
+  if (global.win) {
+    if (global.win.isMinimized()) global.win.restore();
+    global.win.focus();
+  }
+  const url = commandLine.find((arg) => {
+    const cleanArg = arg.replace(/^['"]|['"]$/g, "");
+    return cleanArg.startsWith("strawverse://");
+  });
+  logger.info("[Protocol] Found URL in second-instance args: " + url);
+  if (url) {
+    handleCustomProtocolUrl(url);
+  }
+});
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  logger.info("[Protocol] open-url triggered: " + url);
+  handleCustomProtocolUrl(url);
+});
+
+try {
+  app.commandLine.appendSwitch("force_high_performance_gpu");
+} catch (e) {
+  logger.error("[GPU] Failed to check forceHighPerformanceGpu: " + e.message);
+}
+
+// Load package.json config dynamically for the auto-updater to support fork updates
+try {
+  const pkg = require("./package.json");
+  if (pkg.build && pkg.build.publish) {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: pkg.build.publish.owner,
+      repo: pkg.build.publish.repo,
+    });
+  } else {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: "TheYogMehta",
+      repo: "StrawVerse",
+    });
+  }
+} catch (err) {
+  autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "TheYogMehta",
+    repo: "StrawVerse",
+  });
+}
+
+const guiDistDir = fs.existsSync(path.join(__dirname, "gui", "dist"))
+  ? path.join(__dirname, "gui", "dist")
+  : path.join(__dirname, "..", "gui", "dist");
+
+const preloadPath = fs.existsSync(path.join(__dirname, "preload.js"))
+  ? path.join(__dirname, "preload.js")
+  : path.join(__dirname, "backend", "preload.js");
+
+//  functions
+const { getKeyValue, setKeyValue } = require(
+  path.join(backendDir, "utils", "db"),
+);
+const { runStartupCleanup } = require(
+  path.join(backendDir, "utils", "ImageCacheManager"),
+);
+const { playInMpv, toProxyUrl } = require(
+  path.join(backendDir, "utils", "mpvPlayer"),
+);
+const {
+  SettingsLoad,
+  patchModulePaths,
+  loadAllScrapers,
+  disableWhatsNew,
+  settingupdate,
+} = require(path.join(backendDir, "utils", "settings"));
+const { loadQueue, continuousExecution } = require(
+  path.join(backendDir, "utils", "queue"),
+);
+const { StopDiscordRPC } = require(path.join(backendDir, "utils", "discord"));
+const { createScrapperWindow, ExitScrapperWindow } = require(
+  path.join(backendDir, "utils", "scrapper"),
+);
+const { getHeaders } = require(path.join(backendDir, "utils", "proxyHeaders"));
+const { isBypassableUrl } = require(
+  path.join(backendDir, "utils", "extensionRegistry"),
+);
+const { registerSharedStateHandlers } = require("./sharedState");
+const { checkForMappingUpdates } = require(
+  path.join(backendDir, "utils", "mappingUpdater"),
+);
+
+// Express Server
+const routes = require(path.join(backendDir, "routes", "index"));
+const appExpress = express();
+appExpress.set("trust proxy", true);
+appExpress.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization, Range",
+  );
+  res.header(
+    "Access-Control-Expose-Headers",
+    "Content-Length, Content-Range, Accept-Ranges",
+  );
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+appExpress.use(express.urlencoded({ limit: "50mb", extended: true }));
+appExpress.use(express.json({ limit: "50mb" }));
+appExpress.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && "status" in err && err.status === 400 && "body" in err) {
+    logger.warn(`[Express] Malformed JSON payload ignored from ${req.url}: ${err.message}`);
+    return res.status(400).json({ error: "Malformed JSON payload" });
+  }
+  next(err);
+});
+appExpress.use(express.static(guiDistDir));
+appExpress.set("views", guiDistDir);
+appExpress.use((req, res, next) => {
+  res.locals.MalLoggedIn = global.MalLoggedIn;
+  next();
+});
+appExpress.use(routes);
+
+registerSharedStateHandlers();
+
+function stripElectronBrands(value = "") {
+  return value
+    .replace(/,?\s*"Electron";v="[^"]+"/g, "")
+    .replace(/"Electron";v="[^"]+",?\s*/g, "");
+}
+
+function normalizeHttpOrigin(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(decodeURIComponent(value));
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return url.origin + "/";
+  } catch (e) {
+    return "";
+  }
+}
+
+function setRefererHeaders(headers, referer) {
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === "referer") delete headers[k];
+    if (k.toLowerCase() === "origin") delete headers[k];
+  }
+  const originReferer = normalizeHttpOrigin(referer);
+  if (originReferer) {
+    headers.Referer = originReferer;
+    headers.Origin = originReferer.slice(0, -1);
+  } else if (referer) {
+    headers.Referer = referer;
+  }
+}
+
+function mergeCookie(headers, dbCookieStr) {
+  if (!dbCookieStr) return;
+  let existingCookie = "";
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === "cookie") {
+      existingCookie = headers[k];
+      delete headers[k];
+    }
+  }
+  if (!existingCookie) {
+    headers.Cookie = dbCookieStr;
+    return;
+  }
+
+  const cookieMap = {};
+  existingCookie.split(";").forEach((pair) => {
+    const idx = pair.indexOf("=");
+    if (idx > 0) {
+      const key = pair.slice(0, idx).trim();
+      const val = pair.slice(idx + 1).trim();
+      if (key) cookieMap[key] = val;
+    }
+  });
+
+  dbCookieStr.split(";").forEach((pair) => {
+    const idx = pair.indexOf("=");
+    if (idx > 0) {
+      const key = pair.slice(0, idx).trim();
+      const val = pair.slice(idx + 1).trim();
+      if (key) cookieMap[key] = val;
+    }
+  });
+
+  headers.Cookie = Object.entries(cookieMap)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
+}
+
+const createWindow = () => {
+  global.win = new BrowserWindow({
+    title: "Airbox",
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: true,
+      backgroundThrottling: true,
+      contextIsolation: true,
+      webSecurity: false,
+      preload: preloadPath,
+    },
+    icon: path.join(
+      __dirname,
+      process.platform === "win32"
+        ? (fs.existsSync(path.join(__dirname, "assets/airbox.ico"))
+            ? "./assets/airbox.ico"
+            : "./assets/iconmedia.ico")
+        : (fs.existsSync(path.join(__dirname, "assets/airbox.png"))
+            ? "./assets/airbox.png"
+            : "./assets/iconmedia.png"),
+    ),
+    minWidth: 1000,
+    minHeight: 750,
+  });
+
+  global.win.maximize();
+  nativeTheme.themeSource = "dark";
+
+  global.win.webContents.on("did-finish-load", () => {
+    global.win.webContents.setVisualZoomLevelLimits(1, 1);
+    for (const [channel, data] of lastStatusCache.entries()) {
+      try {
+        global.win.webContents.send(channel, data);
+      } catch (_) {}
+    }
+  });
+
+  global.win.webContents.on("before-input-event", (event, input) => {
+    if (input.type === "keyDown" && (input.control || input.meta)) {
+      if (
+        input.key === "+" ||
+        input.key === "=" ||
+        input.code === "Equal" ||
+        input.code === "NumpadAdd"
+      ) {
+        event.preventDefault();
+        try {
+          global.win.webContents.send("reader-zoom", "in");
+        } catch (_) {}
+        return;
+      }
+      if (
+        input.key === "-" ||
+        input.key === "_" ||
+        input.code === "Minus" ||
+        input.code === "NumpadSubtract"
+      ) {
+        event.preventDefault();
+        try {
+          global.win.webContents.send("reader-zoom", "out");
+        } catch (_) {}
+        return;
+      }
+    }
+  });
+
+  const startUrl = process.env.ELECTRON_START_URL || `http://localhost:${global.PORT}`;
+  global.win.loadURL(startUrl);
+
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: ["*://*/*"],
+    },
+    (details, callback) => {
+      try {
+        const requestUrl = new URL(details.url);
+        if (
+          requestUrl.hostname === "localhost" &&
+          (requestUrl.port === String(global.PORT) || requestUrl.port === "5173")
+        ) {
+          callback({ requestHeaders: details.requestHeaders });
+          return;
+        }
+      } catch (e) {}
+
+      const resolvedHeaders = getHeaders(details.url);
+      const referer = resolvedHeaders.Referer;
+      const userAgent = resolvedHeaders["User-Agent"];
+      const Cookie = resolvedHeaders.Cookie;
+      const secChUa = resolvedHeaders["Sec-CH-UA"];
+      const secChMobile = resolvedHeaders["Sec-CH-UA-Mobile"];
+      const secChPlatform = resolvedHeaders["Sec-CH-UA-Platform"];
+      const stripHeaders = resolvedHeaders._strip;
+
+      if (referer) setRefererHeaders(details.requestHeaders, referer);
+      if (userAgent) details.requestHeaders["User-Agent"] = userAgent;
+      if (secChUa) details.requestHeaders["sec-ch-ua"] = secChUa;
+      if (secChMobile) details.requestHeaders["sec-ch-ua-mobile"] = secChMobile;
+      if (secChPlatform)
+        details.requestHeaders["sec-ch-ua-platform"] = secChPlatform;
+      mergeCookie(details.requestHeaders, Cookie);
+
+      if (details.requestHeaders["sec-ch-ua"]) {
+        details.requestHeaders["sec-ch-ua"] = stripElectronBrands(
+          details.requestHeaders["sec-ch-ua"],
+        );
+      }
+      if (details.requestHeaders["sec-ch-ua-full-version-list"]) {
+        details.requestHeaders["sec-ch-ua-full-version-list"] =
+          stripElectronBrands(
+            details.requestHeaders["sec-ch-ua-full-version-list"],
+          );
+      }
+
+      if (Array.isArray(stripHeaders)) {
+        for (const h of stripHeaders) {
+          delete details.requestHeaders[h];
+          delete details.requestHeaders[h.toLowerCase()];
+        }
+      }
+
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
+
+  const bypassingDomains = new Set();
+  const bypassQueue = [];
+  let bypassRunning = false;
+
+  const getParentDomain = (hostname) => {
+    const parts = hostname.replace("www.", "").split(".");
+    return parts.length > 2 ? parts.slice(-2).join(".") : parts.join(".");
+  };
+
+  const runBypassQueue = async () => {
+    if (bypassRunning || bypassQueue.length === 0) return;
+    bypassRunning = true;
+    const { url, domain, referer, resolve } = bypassQueue.shift();
+    try {
+      console.log(`[WebRequest] Running CF bypass for ${domain}...`);
+      await global.cloudflarebypass(url, true, referer);
+      console.log(`[WebRequest] CF bypass completed for ${domain}`);
+    } catch (err) {
+      console.error(
+        `[WebRequest] CF bypass failed for ${domain}:`,
+        err.message,
+      );
+    } finally {
+      setTimeout(() => bypassingDomains.delete(domain), 30000);
+      bypassRunning = false;
+      if (resolve) resolve();
+      runBypassQueue();
+    }
+  };
+
+  const queueBypass = (url, domain, referer) => {
+    return new Promise((resolve) => {
+      bypassQueue.push({ url, domain, referer, resolve });
+      runBypassQueue();
+    });
+  };
+
+  ipcMain.removeHandler("ensure-cf-bypass");
+  ipcMain.handle(
+    "ensure-cf-bypass",
+    async (event, targetUrl, sourceReferer) => {
+      try {
+        if (!targetUrl) return { ok: true };
+        if (
+          targetUrl.startsWith("file:") ||
+          targetUrl.startsWith("data:") ||
+          targetUrl.startsWith("/")
+        ) {
+          return { ok: true };
+        }
+        const urlObj = new URL(targetUrl);
+        const hostname = urlObj.hostname.toLowerCase();
+        if (
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          !isBypassableUrl(targetUrl, sourceReferer)
+        ) {
+          return { ok: true };
+        }
+        const domain = getParentDomain(urlObj.hostname);
+        const explicitReferer = normalizeHttpOrigin(sourceReferer);
+        if (explicitReferer && global.setDynamicReferer) {
+          global.setDynamicReferer(urlObj.hostname, explicitReferer);
+          global.setFallbackReferer(explicitReferer);
+        }
+        const headers = getHeaders(targetUrl);
+        if (headers.Cookie && headers.Cookie.includes("cf_clearance")) {
+          return { ok: true };
+        }
+
+        const testOptions: any = {
+          method: "HEAD",
+          headers: { "User-Agent": headers["User-Agent"] || "" },
+        };
+        if (explicitReferer) {
+          testOptions.referrer = explicitReferer;
+          testOptions.referrerPolicy = "unsafe-url";
+        }
+        const testRes = await session.defaultSession
+          .fetch(targetUrl, testOptions)
+          .catch(() => null);
+        if (testRes && testRes.status !== 403 && testRes.status !== 503) {
+          return { ok: true };
+        }
+        if (!bypassingDomains.has(domain) && global.cloudflarebypass) {
+          bypassingDomains.add(domain);
+          await queueBypass(urlObj.origin + "/", domain, explicitReferer);
+        } else if (bypassingDomains.has(domain)) {
+          // Wait for existing bypass to finish
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (!bypassingDomains.has(domain) || !bypassRunning) resolve();
+              else setTimeout(check, 500);
+            };
+            setTimeout(check, 1000);
+          });
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  );
+
+  global.win.webContents.on("will-navigate", (event, url) => {
+    if (url.startsWith(`http://localhost:${global.PORT}`) || url.startsWith("http://localhost:5173")) {
+      return;
+    }
+    event.preventDefault();
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+    }
+  });
+
+  global.win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`http://localhost:${global.PORT}`) || url.startsWith("http://localhost:5173")) {
+      return { action: "allow" };
+    }
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
+
+  global.win.webContents.on("context-menu", (event) => {
+    event.preventDefault();
+  });
+
+  global.win.webContents.on("before-input-event", (event, input) => {
+    if (input.control && input.key.toLowerCase() === "i") {
+      event.preventDefault();
+    }
+  });
+
+  ipcMain.removeHandler("check-whats-new");
+  ipcMain.handle("check-whats-new", async () => {
+    try {
+      const showWhatsNew = !!getKeyValue("Settings", "showWhatsNew");
+
+      let changelogContent = "";
+      if (showWhatsNew) {
+        const changelogPath = path.resolve(__dirname, "..", "changelog.md");
+        if (fs.existsSync(changelogPath)) {
+          changelogContent = fs.readFileSync(changelogPath, "utf8");
+          const parts = changelogContent.split(
+            /(?:^|\n)#+\s*\[\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?\][^\n]*/,
+          );
+          if (parts.length > 1) {
+            const match = changelogContent.match(
+              /(?:^|\n)(#+\s*\[\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?\]\s*-\s*\d{4}-\d{2}-\d{2})/,
+            );
+            const versionHeader = match ? match[1].trim() : "# What's New";
+            changelogContent = `${versionHeader}\n\n${parts[1].trim()}`;
+          }
+        }
+        disableWhatsNew();
+      }
+
+      return {
+        showWhatsNew,
+        changelog: changelogContent,
+      };
+    } catch (err) {
+      logger.error("Failed to check whats new: " + err.message);
+      return { showWhatsNew: false, changelog: "" };
+    }
+  });
+
+  ipcMain.removeHandler("disable-whats-new");
+  ipcMain.handle("disable-whats-new", async () => {
+    try {
+      disableWhatsNew();
+      logger.info("IPC: disabled whats new pop up successfully");
+    } catch (err) {
+      logger.error("Failed to disable whats new: " + err.message);
+    }
+  });
+
+  ipcMain.removeAllListeners("marketplace");
+  ipcMain.on("marketplace", (event, AnimeManga) => {
+    if (global.marketplaceWin && !global.marketplaceWin.isDestroyed()) {
+      global.marketplaceWin.focus();
+      return;
+    }
+
+    global.marketplaceWin = new BrowserWindow({
+      width: 900,
+      height: 500,
+      parent: global.win,
+      modal: process.platform !== "linux",
+      title: "MarketPlace",
+      webPreferences: {
+        preload: preloadPath,
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    const marketBase = process.env.ELECTRON_START_URL || `http://localhost:${global.PORT}`;
+    global.marketplaceWin.loadURL(
+      `${marketBase}/marketplace?type=${AnimeManga}`,
+    );
+  });
+
+  global.win.on("closed", async () => {
+    if (global.ScrapperWindow && !global.ScrapperWindow.isDestroyed()) {
+      await ExitScrapperWindow();
+    }
+
+    if (global.marketplaceWin && !global.marketplaceWin.isDestroyed()) {
+      global.marketplaceWin.close();
+      global.marketplaceWin = null;
+    }
+
+    await StopDiscordRPC();
+
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+
+  if (process.platform === "darwin") {
+    const template = [
+      {
+        label: app.name || "StrawVerse",
+        submenu: [
+          { role: "about" },
+          { type: "separator" },
+          { role: "services" },
+          { type: "separator" },
+          { role: "hide" },
+          { role: "hideOthers" },
+          { role: "unhide" },
+          { type: "separator" },
+          { role: "quit" },
+        ],
+      },
+      {
+        label: "Edit",
+        submenu: [
+          { role: "undo" },
+          { role: "redo" },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "selectAll" },
+        ],
+      },
+      {
+        label: "View",
+        submenu: [
+          { role: "reload" },
+          { role: "forceReload" },
+          { role: "toggleDevTools" },
+          { type: "separator" },
+          { role: "resetZoom" },
+          { role: "zoomIn" },
+          { role: "zoomOut" },
+          { type: "separator" },
+          { role: "togglefullscreen" },
+        ],
+      },
+      {
+        label: "Window",
+        submenu: [
+          { role: "minimize" },
+          { role: "zoom" },
+          { type: "separator" },
+          { role: "front" },
+          { type: "separator" },
+          { role: "window" },
+        ],
+      },
+      {
+        role: "help",
+        submenu: [
+          {
+            label: "StrawVerse GitHub",
+            click: async () => {
+              await shell.openExternal(
+                "https://github.com/TheYogMehta/StrawVerse",
+              );
+            },
+          },
+          {
+            label: "Discord Community",
+            click: async () => {
+              await shell.openExternal("https://discord.gg/PzfUBgQ2gt");
+            },
+          },
+        ],
+      },
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  } else if (app.isPackaged) {
+    Menu.setApplicationMenu(null);
+  }
+
+  global.updatePowerSaveBlocker();
+};
+
+let powerSaveBlockerId = null;
+
+global.updatePowerSaveBlocker = () => {
+  try {
+    const queueLength = global.getQueueNumber ? global.getQueueNumber() : 0;
+    if (queueLength > 0) {
+      if (
+        powerSaveBlockerId === null ||
+        !powerSaveBlocker.isStarted(powerSaveBlockerId)
+      ) {
+        powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+        logger.info(
+          `Power save blocker active: ${powerSaveBlocker.isStarted(powerSaveBlockerId)}`,
+        );
+      }
+    } else {
+      if (
+        powerSaveBlockerId !== null &&
+        powerSaveBlocker.isStarted(powerSaveBlockerId)
+      ) {
+        powerSaveBlocker.stop(powerSaveBlockerId);
+        logger.info("Power save blocker stopped.");
+        powerSaveBlockerId = null;
+      }
+    }
+  } catch (err) {
+    logger.error("Failed to update power save blocker: " + err.message);
+  }
+};
+
+app.whenReady().then(async () => {
+  const PORT = 9545;
+  global.PORT = PORT;
+  await new Promise<void>((resolve) => {
+    const server = appExpress.listen(PORT, "0.0.0.0", () => {
+      resolve();
+    });
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
+    server.on("error", (err: any) => {
+      logger.error(
+        `Express server failed to listen on port ${PORT}: ${err.message}`,
+      );
+      resolve();
+    });
+  });
+
+  await patchModulePaths();
+  await SettingsLoad();
+  runStartupCleanup();
+  createWindow();
+  createScrapperWindow();
+  await loadQueue();
+  global.updatePowerSaveBlocker();
+
+  checkForMappingUpdates().catch((err) => {
+    logger.error(
+      `[databaseUpdater] Error during startup database updates: ${err.message}`,
+    );
+  });
+
+  await loadAllScrapers();
+  globalShortcut.register("CommandOrControl+Shift+I", () => {});
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    }
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+
+  registerLinuxProtocol();
+  app.setAsDefaultProtocolClient("strawverse");
+
+  const urlArg = process.argv.find((arg) => {
+    const cleanArg = arg.replace(/^['"]|['"]$/g, "");
+    return cleanArg.startsWith("strawverse://");
+  });
+  if (urlArg) {
+    handleCustomProtocolUrl(urlArg);
+  }
+
+  protocol.handle("strawverse", async (request) => {
+    handleCustomProtocolUrl(request.url);
+  });
+
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
+
+  try {
+    continuousExecution();
+  } catch (err) {
+    logger.error(`Error message: ${err.message}`);
+    logger.error(`Stack trace: ${err.stack}`);
+  }
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
+
+// AutoUpdater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on("checking-for-update", () => {
+  logger.info("Checking for updates...");
+});
+
+autoUpdater.on("update-not-available", () => {
+  logger.info("No updates available");
+  if (global.win) {
+    global.win.webContents.send("update-not-available");
+  }
+});
+
+autoUpdater.on("update-available", (info) => {
+  logger.info("Update available: " + (info?.version || "unknown"));
+  if (global.win) {
+    global.win.webContents.send("update-available", {
+      version: info?.version,
+      releaseNotes: info?.releaseNotes,
+    });
+  }
+});
+
+autoUpdater.on("download-progress", (progress) => {
+  if (global.win) {
+    global.win.webContents.send("update-download-progress", {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  }
+});
+
+autoUpdater.on("error", (err) => {
+  const errMsg = err?.message || String(err || "Unknown error");
+  const isCodeSignError =
+    process.platform === "darwin" &&
+    (errMsg.includes("Code signature") ||
+      err?.domain === "SQRLCodeSignatureErrorDomain" ||
+      errMsg.includes("SQRLCodeSignatureErrorDomain"));
+
+  if (isCodeSignError) {
+    logger.warn(
+      "[AutoUpdater] macOS code signature verification failed (application is distributed unsigned). Direct download is recommended.",
+    );
+  } else {
+    logger.error("Error checking for updates:", err);
+  }
+
+  if (global.win) {
+    global.win.webContents.send("update-error", {
+      message: isCodeSignError
+        ? "Auto-update failed due to macOS code signature verification (unsigned build). Please download the latest DMG release from GitHub."
+        : errMsg,
+      isCodeSignError: Boolean(isCodeSignError),
+      releaseUrl: "https://github.com/TheYogMehta/StrawVerse/releases/latest",
+    });
+  }
+});
+
+autoUpdater.on("update-downloaded", () => {
+  logger.info("Update downloaded.");
+  if (global.win) {
+    global.win.webContents.send("update-downloaded");
+  }
+});
+
+ipcMain.handle("check-for-update", async () => {
+  if (!app.isPackaged) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (global.win) {
+          global.win.webContents.send("update-not-available");
+        }
+        resolve({ success: true });
+      }, 1500);
+    });
+  }
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, version: result?.updateInfo?.version };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("download-update", async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("install-update", () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
+ipcMain.handle(
+  "open-local-path",
+  async (event, targetPath, openFolder = false) => {
+    try {
+      if (!targetPath || !fs.existsSync(targetPath)) {
+        return { success: false, error: "Path does not exist" };
+      }
+      const isDir = fs.statSync(targetPath).isDirectory();
+      if (openFolder || isDir) {
+        if (isDir) {
+          const err = await shell.openPath(targetPath);
+          return { success: !err, error: err };
+        } else {
+          try {
+            const shown = shell.showItemInFolder(targetPath);
+            if (!shown && process.platform === "linux") {
+              const dir = path.dirname(targetPath);
+              await shell.openPath(dir);
+            }
+          } catch (_) {
+            const dir = path.dirname(targetPath);
+            await shell.openPath(dir);
+          }
+          return { success: true };
+        }
+      } else {
+        const err = await shell.openPath(targetPath);
+        return { success: !err, error: err };
+      }
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+);
+
+ipcMain.handle("play-in-mpv", async (event, options) => {
+  const win = BrowserWindow.getFocusedWindow() || global.win;
+  if (!win) return { success: false, error: "No focused window found." };
+  try {
+    await playInMpv(win, options);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("control-mpv", (event, command, args) => {
+  if (command === "quit") {
+    const procToKill = global.activeMpvProcess;
+    const clientToDestroy = global.activeMpvClient;
+    if (clientToDestroy && !clientToDestroy.destroyed) {
+      try {
+        clientToDestroy.write(
+          JSON.stringify({ command: ["quit"] }) + "\n",
+        );
+      } catch (err) {}
+    }
+    setTimeout(() => {
+      if (procToKill && !procToKill.killed) {
+        try {
+          procToKill.kill("SIGKILL");
+        } catch (_) {}
+      }
+      if (clientToDestroy && !clientToDestroy.destroyed) {
+        try {
+          clientToDestroy.destroy();
+        } catch (_) {}
+      }
+      if (global.activeMpvProcess === procToKill) {
+        global.activeMpvProcess = null;
+      }
+      if (global.activeMpvClient === clientToDestroy) {
+        global.activeMpvClient = null;
+      }
+      if (global.activeMpvSession) {
+        global.activeMpvSession = null;
+      }
+    }, 150);
+    return { success: true };
+  }
+
+  if (global.activeMpvClient && !global.activeMpvClient.destroyed) {
+    try {
+      let finalArgs = [...args];
+      if (
+        command === "loadfile" &&
+        finalArgs[0] &&
+        typeof finalArgs[0] === "string" &&
+        finalArgs[0].startsWith("http")
+      ) {
+        finalArgs[0] = toProxyUrl(finalArgs[0]);
+      }
+      logger.info(
+        `[MPV Control IPC] Writing command: ${command} with args: ${JSON.stringify(finalArgs)}`,
+      );
+      const payload =
+        JSON.stringify({ command: [command, ...finalArgs] }) + "\n";
+      global.activeMpvClient.write(payload);
+      return { success: true };
+    } catch (err) {
+      logger.error(
+        `[MPV Control IPC] Failed to write command ${command}: ${err.message}`,
+      );
+      return { success: false, error: err.message };
+    }
+  }
+  return { success: false, error: "MPV player is not active." };
+});
+
+// Register Linux protocol handler dynamically (for AppImage and system integration)
+function registerLinuxProtocol() {
+  if (process.platform !== "linux") return;
+  // We only register the custom protocol handler desktop file if the app is packaged
+  if (!app.isPackaged) return;
+
+  try {
+    const desktopDir = path.join(os.homedir(), ".local/share/applications");
+    if (!fs.existsSync(desktopDir)) {
+      fs.mkdirSync(desktopDir, { recursive: true });
+    }
+
+    const desktopFilePath = path.join(desktopDir, "strawverse.desktop");
+
+    // Use the AppImage path if available, fallback to execPath
+    const execPath = process.env.APPIMAGE || process.execPath;
+
+    // Copy icon to user local icons path for persistence
+    const localIconDir = path.join(
+      os.homedir(),
+      ".local/share/icons/hicolor/256x256/apps",
+    );
+    const iconFileName = fs.existsSync(path.join(__dirname, "assets", "airbox.png"))
+      ? "airbox.png"
+      : "iconmedia.png";
+    const localIconPath = path.join(localIconDir, iconFileName);
+    const sourceIconPath = path.join(__dirname, "assets", iconFileName);
+
+    let useIconName = iconFileName.replace(".png", "");
+    if (fs.existsSync(sourceIconPath)) {
+      try {
+        if (!fs.existsSync(localIconDir)) {
+          fs.mkdirSync(localIconDir, { recursive: true });
+        }
+        fs.copyFileSync(sourceIconPath, localIconPath);
+      } catch (iconErr) {
+        logger.error(`[Protocol] Failed to copy icon: ${iconErr.message}`);
+        useIconName = sourceIconPath;
+      }
+    }
+
+    const desktopContent = `[Desktop Entry]
+Name=iconmedia
+Exec="${execPath}" --no-sandbox %U
+Terminal=false
+Type=Application
+Icon=${useIconName}
+StartupWMClass=iconmedia
+X-AppImage-Version=${app.getVersion()}
+Comment=Universal Media Streaming and Batch Downloader
+MimeType=x-scheme-handler/iconmedia;
+Categories=Utility;
+`;
+
+    let shouldWrite = true;
+    if (fs.existsSync(desktopFilePath)) {
+      const existingContent = fs.readFileSync(desktopFilePath, "utf8");
+      if (existingContent === desktopContent) {
+        shouldWrite = false;
+      }
+    }
+
+    if (shouldWrite) {
+      fs.writeFileSync(desktopFilePath, desktopContent, "utf8");
+      fs.chmodSync(desktopFilePath, "755");
+      logger.info(`[Protocol] Registered desktop entry at ${desktopFilePath}`);
+
+      exec(
+        `xdg-mime default strawverse.desktop x-scheme-handler/strawverse`,
+        (error, stdout, stderr) => {
+          if (error) {
+            logger.error(`[Protocol] xdg-mime failed: ${error.message}`);
+          } else {
+            logger.info(
+              `[Protocol] Registered strawverse scheme handler via xdg-mime`,
+            );
+          }
+        },
+      );
+    }
+  } catch (err) {
+    logger.error(
+      `[Protocol] Failed to register custom protocol on Linux: ${err.message}`,
+    );
+  }
+}
+
+// Cache of recently processed protocol codes to prevent duplicate invocations (e.g. on macOS)
+const processedProtocolCodes = new Map();
+
+// handle custom protocol - only works in packaged version
+function handleCustomProtocolUrl(urlStr) {
+  const cleanUrlStr = urlStr.replace(/^['"]|['"]$/g, "");
+  logger.info("[Protocol] handleCustomProtocolUrl called with: " + cleanUrlStr);
+  try {
+    const url = new URL(cleanUrlStr);
+    const code = url.searchParams.get("code");
+    logger.info("[Protocol] Parsed code: " + code);
+    if (code) {
+      const now = Date.now();
+      for (const [c, timestamp] of processedProtocolCodes.entries()) {
+        if (now - timestamp > 30000) processedProtocolCodes.delete(c);
+      }
+      if (processedProtocolCodes.has(code)) {
+        logger.info(
+          "[Protocol] Skipping duplicate callback request for code: " +
+            code.substring(0, 10) +
+            "...",
+        );
+        return;
+      }
+      processedProtocolCodes.set(code, now);
+
+      const callbackUrl = `http://localhost:${global.PORT}/mal/callback?code=${code}`;
+      logger.info(
+        "[Protocol] Triggering background callback request: " + callbackUrl,
+      );
+
+      fetch(callbackUrl)
+        .then((res) => {
+          logger.info(
+            "[Protocol] Background MAL callback request completed with status: " +
+              res.status,
+          );
+        })
+        .catch((err) => {
+          logger.error(
+            "[Protocol] Background MAL callback request failed: " + err.message,
+          );
+        });
+
+      if (global.win) {
+        if (global.win.isMinimized()) global.win.restore();
+        global.win.focus();
+      }
+    } else {
+      logger.warn("[Protocol] No code parameter found in URL!");
+    }
+  } catch (e) {
+    logger.error(
+      "[Protocol] Failed to parse custom protocol URL: " +
+        cleanUrlStr +
+        " Error: " +
+        e.message,
+    );
+  }
+}

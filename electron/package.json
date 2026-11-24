@@ -1,10 +1,12 @@
 {
-  "name": "iconmedia",
+  "name": "airbox",
   "version": "1.0.0",
-  "productName": "Iconmedia",
-  "description": "Iconmedia - Universal Media Streaming and Batch Downloader",
+  "productName": "Airbox",
+  "description": "Airbox - Modern Open Source Streaming and Batch Downloader Studio",
   "main": "gui.js",
   "scripts": {
+    "build:ts": "node node_modules/esbuild/bin/esbuild gui.ts preload.ts sharedState.ts --platform=node --outdir=. && node node_modules/esbuild/bin/esbuild ../backend/*.ts ../backend/routes/*.ts ../backend/utils/*.ts --platform=node --outbase=../backend --outdir=../backend",
+    "prestart": "npm run build:ts",
     "start": "electron .",
     "prebuild": "node scripts/download-binaries.js",
     "build": "npm run build --prefix ../gui",
@@ -21,14 +23,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ikonicity-airban/Iconmedia.git"
+    "url": "https://github.com/ikonicity-airban/Airbox.git"
   },
   "build": {
-    "appId": "com.iconmedia.app",
+    "appId": "com.airbox.app",
     "protocols": [
       {
-        "name": "iconmedia-protocols",
+        "name": "airbox-protocols",
         "schemes": [
+          "airbox",
           "iconmedia"
         ]
       }
@@ -59,7 +62,7 @@
           ]
         }
       ],
-      "artifactName": "Iconmedia.Setup.${version}.exe",
+      "artifactName": "Airbox.Setup.${version}.exe",
       "icon": "assets/iconmedia.ico"
     },
     "publish": {
@@ -112,7 +115,7 @@
       "category": "public.app-category.entertainment",
       "icon": "assets/iconmedia.png",
       "identity": null,
-      "artifactName": "Iconmedia-${version}-mac-arm64.${ext}"
+      "artifactName": "Airbox-${version}-mac-arm64.${ext}"
     },
     "dmg": {
       "contents": [
@@ -166,8 +169,12 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
     "electron": "^42.11.16",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "@electron/get": "^5.1.0",

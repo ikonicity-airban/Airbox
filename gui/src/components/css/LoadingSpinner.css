@@ -1,0 +1,93 @@
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  position: relative;
+  user-select: none;
+}
+
+.loader-container.fullscreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 9, 13, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  min-height: 100vh;
+}
+
+.loader-container.panel {
+  min-height: 320px;
+  width: 100%;
+  padding: 32px 16px;
+}
+
+.loader-container.inline {
+  display: inline-flex;
+  min-height: auto;
+  gap: 8px;
+}
+
+/* Clean Single Spinner */
+.loader-spinner-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-spinner {
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent, #8b5cf6);
+  animation: spinnerRotate 0.85s linear infinite;
+}
+
+.loader-size-sm .loader-spinner {
+  width: 22px;
+  height: 22px;
+  border-width: 2px;
+}
+
+.loader-size-md .loader-spinner {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+.loader-size-lg .loader-spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 3.5px;
+}
+
+@keyframes spinnerRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Status Text */
+.loader-status-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.loader-primary-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-muted, #9ca3af);
+  letter-spacing: -0.1px;
+}
+
+.loader-subtext {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}

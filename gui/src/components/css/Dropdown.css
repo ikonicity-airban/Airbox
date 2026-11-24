@@ -96,8 +96,8 @@
 }
 
 .custom-dropdown-item.selected {
-  background-color: rgba(124, 58, 237, 0.2);
-  color: var(--accent-hover);
+  background-color: var(--bg-tertiary);
+  color: var(--text-main);
   font-weight: 600;
 }
 
@@ -108,12 +108,12 @@
 }
 
 .custom-dropdown-item.create-new {
-  color: var(--accent-hover);
+  color: var(--accent);
 }
 
 .custom-dropdown-item.create-new:hover {
-  background-color: rgba(124, 58, 237, 0.1);
-  color: white;
+  background-color: var(--bg-tertiary);
+  color: var(--accent-hover);
 }
 
 @media (max-width: 768px) {

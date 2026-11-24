@@ -47,7 +47,7 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  object-fit: cover;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
@@ -87,13 +87,14 @@
   color: var(--text-main);
 }
 .sidebar-item.active {
-  background: var(--sidebar-active-bg, rgba(139, 92, 246, 0.2));
-  color: var(--sidebar-active-color, var(--accent));
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 1px solid var(--border);
   font-weight: 600;
-  box-shadow: 0 0 12px var(--sidebar-active-glow, rgba(139, 92, 246, 0.3));
 }
 .sidebar-item.active:hover {
-  background: var(--sidebar-active-bg-hover, rgba(139, 92, 246, 0.32));
+  background: var(--bg-tertiary);
+  color: var(--accent-hover);
 }
 .sidebar.collapsed .sidebar-item {
   justify-content: center;

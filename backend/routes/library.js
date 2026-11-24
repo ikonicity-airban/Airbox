@@ -8,12 +8,12 @@ const {
   MangaInfo,
   movieInfo,
   invalidateCache,
-  resolveDownloadFolder,
+  resolveDownloadFolder
 } = require("../utils/AnimeManga");
 const { MetadataRemove, MetadataAdd } = require("../utils/Metadata");
 const {
   getBaseDownloadDir,
-  cleanupEmptyDownloadFolder,
+  cleanupEmptyDownloadFolder
 } = require("../download");
 const {
   isVideoFile,
@@ -27,7 +27,7 @@ const {
   parseTags,
   isReservedTag,
   getReservedTags,
-  SEASON_FOLDER_RE,
+  SEASON_FOLDER_RE
 } = require("../utils/constants");
 const { updateHistory } = require("../utils/history");
 const {
@@ -35,29 +35,20 @@ const {
   setKeyValue,
   queryAll,
   queryOne,
-  run,
+  run
 } = require("../utils/db");
 const { exec } = require("child_process");
 const { GetDir } = require("../utils/DirectoryMaker");
 const ImageCacheManager = require("../utils/ImageCacheManager");
 const { resolveMalIdFromMapping } = require("../utils/mappingResolver");
-
 const router = express.Router();
-
 function normalizeLibraryType(rawType, id = null) {
-  if (
-    typeof id === "string" &&
-    (id.startsWith("tv:") || id.startsWith("movie:"))
-  ) {
+  if (typeof id === "string" && (id.startsWith("tv:") || id.startsWith("movie:"))) {
     return "Movies";
   }
   if (!rawType) return "Anime";
   const s = String(rawType).trim();
-  if (
-    s === "Movies" ||
-    s.toLowerCase() === "movies" ||
-    s.toLowerCase() === "movie"
-  ) {
+  if (s === "Movies" || s.toLowerCase() === "movies" || s.toLowerCase() === "movie") {
     return "Movies";
   }
   if (s === "Manga" || s.toLowerCase() === "manga") {
@@ -65,31 +56,26 @@ function normalizeLibraryType(rawType, id = null) {
   }
   return "Anime";
 }
-
-// View tags for Anime/Manga/Movies in custom user order
 router.get("/api/local/tags", (req, res) => {
   const type = normalizeLibraryType(req.query.type);
   res.redirect(
-    `/api/local/tags/view/${type}${req.query.includeHidden ? "?includeHidden=true" : ""}`,
+    `/api/local/tags/view/${type}${req.query.includeHidden ? "?includeHidden=true" : ""}`
   );
 });
-
 router.get("/api/local/tags/view/:type", async (req, res) => {
   try {
     const type = normalizeLibraryType(req.params.type);
     const includeHidden = req.query.includeHidden === "true";
     const defaultTags = getReservedTags(type);
-    let savedOrder = (await getKeyValue("Settings", `tag_order_${type}`)) || [
-      ...defaultTags,
+    let savedOrder = await getKeyValue("Settings", `tag_order_${type}`) || [
+      ...defaultTags
     ];
-    const hiddenTags =
-      (await getKeyValue("Settings", `hidden_tags_${type}`)) || [];
-
+    const hiddenTags = await getKeyValue("Settings", `hidden_tags_${type}`) || [];
     for (const dt of defaultTags) {
       if (!savedOrder.includes(dt)) {
         if (dt === "Completed") {
-          const planIdx = savedOrder.findIndex((t) =>
-            /plan to (watch|read)/i.test(t),
+          const planIdx = savedOrder.findIndex(
+            (t) => /plan to (watch|read)/i.test(t)
           );
           if (planIdx !== -1) {
             savedOrder.splice(planIdx + 1, 0, "Completed");
@@ -101,38 +87,32 @@ router.get("/api/local/tags/view/:type", async (req, res) => {
         }
       }
     }
-
     const rows = await queryAll(
-      `SELECT CustomTag FROM ${type} WHERE CustomTag IS NOT NULL AND CustomTag != ''`,
+      `SELECT CustomTag FROM ${type} WHERE CustomTag IS NOT NULL AND CustomTag != ''`
     );
-    const allTagsSet = new Set([...defaultTags, ...savedOrder]);
+    const allTagsSet = /* @__PURE__ */ new Set([...defaultTags, ...savedOrder]);
     for (const r of rows) {
       for (const t of parseTags(r.CustomTag)) {
         allTagsSet.add(t);
       }
     }
-
     const orderedList = [];
-
     for (const tag of savedOrder) {
       if (allTagsSet.has(tag)) {
         orderedList.push(tag);
         allTagsSet.delete(tag);
       }
     }
-
     for (const tag of allTagsSet) {
       orderedList.push(tag);
     }
-
     if (includeHidden) {
       const tagsWithState = orderedList.map((tag) => ({
         name: tag,
-        hidden: hiddenTags.includes(tag),
+        hidden: hiddenTags.includes(tag)
       }));
       return res.json({ tags: tagsWithState, hiddenTags });
     }
-
     const visibleTags = orderedList.filter((t) => !hiddenTags.includes(t));
     res.json(visibleTags);
   } catch (err) {
@@ -140,8 +120,6 @@ router.get("/api/local/tags/view/:type", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Create custom tag in settings
 router.post("/api/local/tags/create", async (req, res) => {
   try {
     let { type, tag } = req.body;
@@ -149,45 +127,36 @@ router.post("/api/local/tags/create", async (req, res) => {
     if (!type || !tag) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
-
     const trimmed = tag.trim();
     if (!trimmed) {
       return res.status(400).json({ error: "Tag name cannot be empty" });
     }
-
     if (isReservedTag(trimmed, type)) {
       return res.status(400).json({
-        error: `"${trimmed}" is a reserved system tag and cannot be created manually.`,
+        error: `"${trimmed}" is a reserved system tag and cannot be created manually.`
       });
     }
-
     const defaultTags = getReservedTags(type);
-    const savedOrder = (await getKeyValue("Settings", `tag_order_${type}`)) || [
-      ...defaultTags,
+    const savedOrder = await getKeyValue("Settings", `tag_order_${type}`) || [
+      ...defaultTags
     ];
-    if (
-      savedOrder.some((t) => t.trim().toLowerCase() === trimmed.toLowerCase())
-    ) {
+    if (savedOrder.some((t) => t.trim().toLowerCase() === trimmed.toLowerCase())) {
       return res.status(400).json({
-        error: `A tag named "${trimmed}" already exists. Tag names must be unique.`,
+        error: `A tag named "${trimmed}" already exists. Tag names must be unique.`
       });
     }
-
     savedOrder.push(trimmed);
     await setKeyValue("Settings", `tag_order_${type}`, savedOrder);
-
     return res.json({
       error: false,
       message: "Tag created successfully",
-      tags: savedOrder,
+      tags: savedOrder
     });
   } catch (err) {
     logger.error(`Error in /api/local/tags/create: ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 });
-
-// Reorder tags in settings
 router.post("/api/local/tags/reorder", async (req, res) => {
   try {
     let { type, tags } = req.body;
@@ -195,20 +164,17 @@ router.post("/api/local/tags/reorder", async (req, res) => {
     if (!type || !Array.isArray(tags)) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
-
     await setKeyValue("Settings", `tag_order_${type}`, tags);
     return res.json({
       error: false,
       message: "Tag order saved successfully",
-      tags,
+      tags
     });
   } catch (err) {
     logger.error(`Error in /api/local/tags/reorder: ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 });
-
-// Toggle tag visibility (hide / unhide)
 router.post("/api/local/tags/toggle-visibility", async (req, res) => {
   try {
     let { type, tag, hidden } = req.body;
@@ -216,11 +182,8 @@ router.post("/api/local/tags/toggle-visibility", async (req, res) => {
     if (!type || !tag) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
-
     const trimmed = tag.trim();
-    let hiddenTags =
-      (await getKeyValue("Settings", `hidden_tags_${type}`)) || [];
-
+    let hiddenTags = await getKeyValue("Settings", `hidden_tags_${type}`) || [];
     if (hidden) {
       if (!hiddenTags.includes(trimmed)) {
         hiddenTags.push(trimmed);
@@ -228,20 +191,17 @@ router.post("/api/local/tags/toggle-visibility", async (req, res) => {
     } else {
       hiddenTags = hiddenTags.filter((t) => t !== trimmed);
     }
-
     await setKeyValue("Settings", `hidden_tags_${type}`, hiddenTags);
     return res.json({
       error: false,
       message: `Tag "${trimmed}" ${hidden ? "hidden" : "unhidden"} successfully`,
-      hiddenTags,
+      hiddenTags
     });
   } catch (err) {
     logger.error(`Error in /api/local/tags/toggle-visibility: ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 });
-
-// Delete custom tag from settings and library items
 router.post("/api/local/tags/delete-tag", async (req, res) => {
   try {
     let { type, tag } = req.body;
@@ -249,59 +209,40 @@ router.post("/api/local/tags/delete-tag", async (req, res) => {
     if (!type || !tag) {
       return res.status(400).json({ error: "Invalid parameters" });
     }
-
     const trimmed = tag.trim();
     if (isReservedTag(trimmed, type)) {
-      return res
-        .status(400)
-        .json({ error: `System tag "${trimmed}" cannot be deleted.` });
+      return res.status(400).json({ error: `System tag "${trimmed}" cannot be deleted.` });
     }
-
-    // 1. Remove from saved order & hidden list
     const defaultTags = getReservedTags(type);
-    let savedOrder =
-      (await getKeyValue("Settings", `tag_order_${type}`)) || defaultTags;
+    let savedOrder = await getKeyValue("Settings", `tag_order_${type}`) || defaultTags;
     savedOrder = savedOrder.filter((t) => t !== trimmed);
     await setKeyValue("Settings", `tag_order_${type}`, savedOrder);
-
-    let hiddenTags =
-      (await getKeyValue("Settings", `hidden_tags_${type}`)) || [];
+    let hiddenTags = await getKeyValue("Settings", `hidden_tags_${type}`) || [];
     if (hiddenTags.includes(trimmed)) {
       hiddenTags = hiddenTags.filter((t) => t !== trimmed);
       await setKeyValue("Settings", `hidden_tags_${type}`, hiddenTags);
     }
-
-    // 2. Remove from database items
-    const rows = await global.db
-      .prepare(
-        `SELECT id, CustomTag FROM ${type} WHERE CustomTag IS NOT NULL AND CustomTag != ''`,
-      )
-      .all();
-
+    const rows = await global.db.prepare(
+      `SELECT id, CustomTag FROM ${type} WHERE CustomTag IS NOT NULL AND CustomTag != ''`
+    ).all();
     for (const r of rows) {
       const tagsArr = parseTags(r.CustomTag);
       if (tagsArr.includes(trimmed)) {
         const updatedTags = tagsArr.filter((t) => t !== trimmed);
-        const newCustomTag =
-          updatedTags.length > 0 ? JSON.stringify(updatedTags) : null;
-        await global.db
-          .prepare(`UPDATE ${type} SET CustomTag = ? WHERE id = ?`)
-          .run(newCustomTag, r.id);
+        const newCustomTag = updatedTags.length > 0 ? JSON.stringify(updatedTags) : null;
+        await global.db.prepare(`UPDATE ${type} SET CustomTag = ? WHERE id = ?`).run(newCustomTag, r.id);
       }
     }
-
     return res.json({
       error: false,
       message: `Tag "${trimmed}" deleted successfully`,
-      tags: savedOrder,
+      tags: savedOrder
     });
   } catch (err) {
     logger.error(`Error in /api/local/tags/delete-tag: ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 });
-
-// Add/Update local library tags or entry
 router.post("/api/local/tags/add", async (req, res) => {
   try {
     let { type, id, provider, MalID, CustomTag } = req.body;
@@ -309,44 +250,35 @@ router.post("/api/local/tags/add", async (req, res) => {
       throw new Error("Missing type or id");
     }
     type = normalizeLibraryType(type, id);
-
     if (provider === "provider" || provider === "local source") {
       provider = null;
     }
-
     let resolvedMalID = type !== "Movies" && MalID ? String(MalID) : null;
-
     if (!resolvedMalID && type !== "Movies") {
       if (global.mappingDb && id) {
         try {
           const mal = await resolveMalIdFromMapping({
             id,
             provider,
-            mediaType: type,
+            mediaType: type
           });
           if (mal) {
             resolvedMalID = String(mal);
           }
         } catch (err) {
           logger.error(
-            `Error resolving MAL ID from mapping DB: ${err.message}`,
+            `Error resolving MAL ID from mapping DB: ${err.message}`
           );
         }
       }
     }
-
     let tagValue = "";
-    if (CustomTag !== undefined) {
+    if (CustomTag !== void 0) {
       const cleanArr = parseTags(CustomTag);
       tagValue = cleanArr.length > 0 ? JSON.stringify(cleanArr) : "[]";
     }
-
-    const targetTable =
-      type === "Anime" ? "Anime" : type === "Movies" ? "Movies" : "Manga";
-    const existing = await global.db
-      .prepare(`SELECT * FROM ${targetTable} WHERE id = ? OR folder_name = ?`)
-      .get(id, id);
-
+    const targetTable = type === "Anime" ? "Anime" : type === "Movies" ? "Movies" : "Manga";
+    const existing = await global.db.prepare(`SELECT * FROM ${targetTable} WHERE id = ? OR folder_name = ?`).get(id, id);
     if (existing) {
       const updates = [];
       const params = [];
@@ -356,33 +288,23 @@ router.post("/api/local/tags/add", async (req, res) => {
           params.push(resolvedMalID);
         } else if (existing.MalID) {
           resolvedMalID = existing.MalID;
-        } else if (MalID !== undefined) {
+        } else if (MalID !== void 0) {
           updates.push("MalID = ?");
           params.push(null);
         }
       }
-      if (CustomTag !== undefined) {
+      if (CustomTag !== void 0) {
         updates.push("CustomTag = ?");
         params.push(tagValue);
       }
       if (updates.length > 0) {
         params.push(existing.id);
-        await global.db
-          .prepare(
-            `UPDATE ${targetTable} SET ${updates.join(", ")}, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
-          )
-          .run(...params);
-
-        const targetMalID = resolvedMalID || existing.MalID;
-        if (
-          type !== "Movies" &&
-          CustomTag !== undefined &&
-          targetMalID &&
-          targetMalID !== ""
-        ) {
-          await global.db
-            .prepare(`UPDATE ${type} SET CustomTag = ? WHERE MalID = ?`)
-            .run(tagValue, targetMalID);
+        await global.db.prepare(
+          `UPDATE ${targetTable} SET ${updates.join(", ")}, last_updated = CURRENT_TIMESTAMP WHERE id = ?`
+        ).run(...params);
+        const targetMalID2 = resolvedMalID || existing.MalID;
+        if (type !== "Movies" && CustomTag !== void 0 && targetMalID2 && targetMalID2 !== "") {
+          await global.db.prepare(`UPDATE ${type} SET CustomTag = ? WHERE MalID = ?`).run(tagValue, targetMalID2);
         }
       }
     } else {
@@ -391,9 +313,8 @@ router.post("/api/local/tags/add", async (req, res) => {
         provider: provider || "",
         type,
         MalID: resolvedMalID,
-        CustomTag: tagValue,
+        CustomTag: tagValue
       };
-
       try {
         const resolvedProvider = await providerFetch(type, provider);
         const config = await settingfetch();
@@ -403,7 +324,7 @@ router.post("/api/local/tags/add", async (req, res) => {
             const animedata = await animeinfo(
               resolvedProvider,
               config?.CustomDownloadLocationAnime,
-              lookupId,
+              lookupId
             );
             if (animedata) {
               if (animedata.malid && !resolvedMalID) {
@@ -416,21 +337,18 @@ router.post("/api/local/tags/add", async (req, res) => {
                 type: animedata.type ?? null,
                 description: animedata.description ?? null,
                 status: animedata.status ?? null,
-                genres:
-                  animedata?.genres?.length > 0
-                    ? animedata.genres.join(",")
-                    : "",
+                genres: animedata?.genres?.length > 0 ? animedata.genres.join(",") : "",
                 aired: animedata?.aired ?? null,
                 ImageUrl: animedata?.image,
                 EpisodesDataId: animedata?.dataId,
-                MalID: resolvedMalID,
+                MalID: resolvedMalID
               };
             }
           } else if (type === "Movies") {
             const movieData = await movieInfo(
               resolvedProvider,
               config?.CustomDownloadLocationMovies,
-              id,
+              id
             );
             if (movieData) {
               values = {
@@ -440,15 +358,10 @@ router.post("/api/local/tags/add", async (req, res) => {
                 type: movieData.type ?? "Movie",
                 description: movieData.description ?? null,
                 status: movieData.status ?? null,
-                genres:
-                  movieData?.genres?.length > 0
-                    ? Array.isArray(movieData.genres)
-                      ? movieData.genres.join(",")
-                      : movieData.genres
-                    : "",
+                genres: movieData?.genres?.length > 0 ? Array.isArray(movieData.genres) ? movieData.genres.join(",") : movieData.genres : "",
                 aired: movieData?.aired || movieData?.released || null,
                 ImageUrl: movieData?.image_url || movieData?.image,
-                MalID: null,
+                MalID: null
               };
             }
           } else if (type === "Manga") {
@@ -462,85 +375,54 @@ router.post("/api/local/tags/add", async (req, res) => {
                 title: mangainfo.title || "",
                 provider: resolvedProvider.provider_name,
                 description: mangainfo.description ?? null,
-                genres:
-                  mangainfo?.genres?.length > 0
-                    ? mangainfo.genres.join(",")
-                    : "",
+                genres: mangainfo?.genres?.length > 0 ? mangainfo.genres.join(",") : "",
                 type: mangainfo.type ?? null,
                 author: mangainfo?.author ?? null,
                 released: mangainfo?.released ?? null,
                 ImageUrl: mangainfo?.image,
-                MalID: resolvedMalID,
+                MalID: resolvedMalID
               };
             }
           }
         }
       } catch (fetchErr) {
         logger.error(
-          `Failed to fetch online metadata in /api/local/tags/add for ${id}: ${fetchErr.message}`,
+          `Failed to fetch online metadata in /api/local/tags/add for ${id}: ${fetchErr.message}`
         );
       }
-
       await MetadataAdd(type, values);
       if (type === "Movies") {
-        await global.db
-          .prepare(`UPDATE Movies SET CustomTag = ? WHERE id = ?`)
-          .run(tagValue, id);
+        await global.db.prepare(`UPDATE Movies SET CustomTag = ? WHERE id = ?`).run(tagValue, id);
       } else {
-        await global.db
-          .prepare(`UPDATE ${type} SET MalID = ?, CustomTag = ? WHERE id = ?`)
-          .run(resolvedMalID, tagValue, id);
-
+        await global.db.prepare(`UPDATE ${type} SET MalID = ?, CustomTag = ? WHERE id = ?`).run(resolvedMalID, tagValue, id);
         if (resolvedMalID && resolvedMalID !== "") {
-          await global.db
-            .prepare(`UPDATE ${type} SET CustomTag = ? WHERE MalID = ?`)
-            .run(tagValue, resolvedMalID);
+          await global.db.prepare(`UPDATE ${type} SET CustomTag = ? WHERE MalID = ?`).run(tagValue, resolvedMalID);
         }
       }
     }
-
-    const targetMalID =
-      type !== "Movies" ? (MalID ? String(MalID) : existing?.MalID) : null;
-    if (
-      type !== "Movies" &&
-      CustomTag !== undefined &&
-      (tagValue === "" || tagValue === "[]") &&
-      targetMalID &&
-      targetMalID !== ""
-    ) {
+    const targetMalID = type !== "Movies" ? MalID ? String(MalID) : existing?.MalID : null;
+    if (type !== "Movies" && CustomTag !== void 0 && (tagValue === "" || tagValue === "[]") && targetMalID && targetMalID !== "") {
       try {
-        const rowsToClean = await global.db
-          .prepare(`SELECT id, folder_name FROM ${type} WHERE MalID = ?`)
-          .all(targetMalID);
-
+        const rowsToClean = await global.db.prepare(`SELECT id, folder_name FROM ${type} WHERE MalID = ?`).all(targetMalID);
         const baseDir = await getBaseDownloadDir(type);
-
         for (const row of rowsToClean) {
           const folderName = row.folder_name || "";
           let folderPath = path.join(baseDir, type, folderName);
-          if (
-            !fs.existsSync(folderPath) &&
-            fs.existsSync(path.join(baseDir, folderName))
-          ) {
+          if (!fs.existsSync(folderPath) && fs.existsSync(path.join(baseDir, folderName))) {
             folderPath = path.join(baseDir, folderName);
           }
           const folderExists = folderName && fs.existsSync(folderPath);
-
           if (!folderExists) {
             await run(`DELETE FROM ${type} WHERE id = ?`, [row.id]);
           }
         }
       } catch (err) {
         logger.error(
-          `Error cleaning up duplicate MalID entries: ${err.message}`,
+          `Error cleaning up duplicate MalID entries: ${err.message}`
         );
       }
     }
-
-    if (
-      req.body.deleteFiles ||
-      (CustomTag !== undefined && (tagValue === "" || tagValue === "[]"))
-    ) {
+    if (req.body.deleteFiles || CustomTag !== void 0 && (tagValue === "" || tagValue === "[]")) {
       try {
         const baseDir = await getBaseDownloadDir(type);
         const typeDir = await resolveDownloadFolder(type, id, null, baseDir);
@@ -550,103 +432,78 @@ router.post("/api/local/tags/add", async (req, res) => {
         }
       } catch (errDir) {
         logger.warn(
-          `[tags/add] Could not delete folder for ${id}: ${errDir.message}`,
+          `[tags/add] Could not delete folder for ${id}: ${errDir.message}`
         );
       }
-
       if (req.body.deleteFiles && global.db) {
         try {
-          const malIdStr =
-            type !== "Movies" && resolvedMalID ? String(resolvedMalID) : null;
+          const malIdStr = type !== "Movies" && resolvedMalID ? String(resolvedMalID) : null;
           await run(
             `DELETE FROM ${type} WHERE id = ? OR folder_name = ?${malIdStr ? " OR MalID = ?" : ""}`,
-            malIdStr ? [id, id, malIdStr] : [id, id],
+            malIdStr ? [id, id, malIdStr] : [id, id]
           );
-
           if (type !== "Movies") {
             await run(
               `DELETE FROM unlinked_mal_ids WHERE id = ?${malIdStr ? " OR malid = ?" : ""}`,
-              malIdStr ? [id, malIdStr] : [id],
+              malIdStr ? [id, malIdStr] : [id]
             );
           }
-
           if (type === "Anime") {
             await run(
               "DELETE FROM SkipTimes WHERE anime_id = ? OR anime_id LIKE ?",
-              [id, `${id}-%`],
+              [id, `${id}-%`]
             );
           }
         } catch (errDb) {
           logger.warn(
-            `[tags/add] Could not delete DB entry for ${id}: ${errDb.message}`,
+            `[tags/add] Could not delete DB entry for ${id}: ${errDb.message}`
           );
         }
       }
     }
-
     try {
       const resolvedProvider = await providerFetch(
         type,
-        provider || existing?.provider,
+        provider || existing?.provider
       );
-      const actualProviderName =
-        resolvedProvider?.provider_name || provider || existing?.provider;
+      const actualProviderName = resolvedProvider?.provider_name || provider || existing?.provider;
       invalidateCache(type, actualProviderName, id);
     } catch (e) {
       logger.error(`Error invalidating cache for ${type} ${id}: ${e.message}`);
     }
-
     return res.json({
       error: false,
-      message: "Successfully updated library item",
+      message: "Successfully updated library item"
     });
   } catch (err) {
     logger.error(`Error in /api/local/tags/add: ${err.message}`);
     return res.json({ error: true, message: err.message });
   }
 });
-
-// Delete Local Tag / Library Entry
 router.post("/api/local/tags/remove", async (req, res) => {
   try {
     let { id, type } = req.body;
     if (!id || !type) throw new Error("ID or Type is missing");
     type = normalizeLibraryType(type, id);
-
     const baseDir = await getBaseDownloadDir(type);
     let typeDir = await resolveDownloadFolder(type, id, null, baseDir);
-
     let dbRecord = null;
     try {
-      dbRecord = await global.db
-        .prepare(`SELECT * FROM ${type} WHERE id = ?`)
-        .get(id);
-    } catch (e) {}
-
+      dbRecord = await global.db.prepare(`SELECT * FROM ${type} WHERE id = ?`).get(id);
+    } catch (e) {
+    }
     if (typeDir && fs.existsSync(typeDir)) {
       await fs.promises.rm(typeDir, { recursive: true, force: true });
     }
-
-    if (
-      !(
-        dbRecord &&
-        dbRecord?.CustomTag &&
-        dbRecord?.CustomTag !== "" &&
-        dbRecord?.CustomTag !== "[]"
-      ) &&
-      !(dbRecord && dbRecord?.MalID && dbRecord?.MalID !== "")
-    ) {
+    if (!(dbRecord && dbRecord?.CustomTag && dbRecord?.CustomTag !== "" && dbRecord?.CustomTag !== "[]") && !(dbRecord && dbRecord?.MalID && dbRecord?.MalID !== "")) {
       await MetadataRemove(type, id);
     }
-
     return res.json({ error: false, message: "Deleted successfully" });
   } catch (err) {
     logger.error(`Error in /api/local/tags/remove: ${err.message}`);
     return res.json({ error: true, message: err.message });
   }
 });
-
-// Switch Provider Metadata Migration
 router.post("/api/metadata/switch-provider", async (req, res) => {
   try {
     const { type, oldId, newId, newProvider } = req.body;
@@ -656,80 +513,60 @@ router.post("/api/metadata/switch-provider", async (req, res) => {
     if (oldId === newId) {
       return res.json({ success: true, message: "No change needed" });
     }
-
-    const table =
-      type === "Anime" ? "Anime" : type === "Movies" ? "Movies" : "Manga";
+    const table = type === "Anime" ? "Anime" : type === "Movies" ? "Movies" : "Manga";
     const existing = await queryOne(`SELECT * FROM ${table} WHERE id = ?`, [
-      oldId,
+      oldId
     ]);
-
     if (existing) {
       await run(`DELETE FROM ${table} WHERE id = ?`, [oldId]);
       existing.id = newId;
       existing.provider = newProvider;
-      existing.last_updated = new Date().toISOString();
+      existing.last_updated = (/* @__PURE__ */ new Date()).toISOString();
       const columns = Object.keys(existing);
       const placeholders = columns.map(() => "?").join(", ");
       const values = columns.map((col) => existing[col]);
-
       await run(
         `INSERT OR REPLACE INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`,
-        values,
+        values
       );
       if (type === "Anime" || type === "Movies") {
         await run(`UPDATE WatchHistory SET anime_id = ? WHERE anime_id = ?`, [
           newId,
-          oldId,
+          oldId
         ]);
       } else {
         await run(`UPDATE ReadHistory SET manga_id = ? WHERE manga_id = ?`, [
           newId,
-          oldId,
+          oldId
         ]);
       }
       return res.json({ success: true, migrated: true });
     }
-
     return res.json({ success: true, migrated: false });
   } catch (err) {
     logger.error(`Error in /api/metadata/switch-provider: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
-
-// Delete Local Files
 router.post("/api/local/delete", async (req, res) => {
   try {
     let { id, type = "Anime", numbers, items, season, subdub } = req.body;
     type = normalizeLibraryType(type, id);
-    if (
-      !id ||
-      ((!numbers || !Array.isArray(numbers) || numbers.length === 0) &&
-        (!items || !Array.isArray(items) || items.length === 0))
-    ) {
+    if (!id || (!numbers || !Array.isArray(numbers) || numbers.length === 0) && (!items || !Array.isArray(items) || items.length === 0)) {
       throw new Error("Missing or invalid parameters");
     }
-
     const baseDir = await getBaseDownloadDir(type);
     let typeDir = await resolveDownloadFolder(type, id, subdub, baseDir);
-
     if (!fs.existsSync(typeDir)) {
       throw new Error(`${type} folder not found on disk`);
     }
-
-    // Normalize targets to delete: [{ number, season }]
     const targets = [];
     if (Array.isArray(items) && items.length > 0) {
       for (const it of items) {
         if (!it) continue;
         const n = parseFloat(it.number);
         if (!isNaN(n)) {
-          const s =
-            it.season != null
-              ? parseInt(it.season, 10)
-              : season != null
-                ? parseInt(season, 10)
-                : null;
+          const s = it.season != null ? parseInt(it.season, 10) : season != null ? parseInt(season, 10) : null;
           targets.push({ number: n, season: !isNaN(s) ? s : null });
         }
       }
@@ -742,13 +579,12 @@ router.post("/api/local/delete", async (req, res) => {
         if (sKeyMatch) {
           targets.push({
             season: parseInt(sKeyMatch[1], 10),
-            number: parseFloat(sKeyMatch[2]),
+            number: parseFloat(sKeyMatch[2])
           });
         } else {
           const n = parseFloat(strNum);
           if (!isNaN(n)) {
             const s = season != null ? parseInt(season, 10) : null;
-            // Only push if not already in targets
             if (!targets.some((t) => t.number === n && t.season === s)) {
               targets.push({ number: n, season: s });
             }
@@ -756,17 +592,13 @@ router.post("/api/local/delete", async (req, res) => {
         }
       }
     }
-
     if (targets.length === 0) {
       throw new Error("No valid episode or chapter targets specified");
     }
-
-    // Collect all candidate files: directly in typeDir and in immediate Season subdirectories
     const candidateFiles = [];
     const rootEntries = await fs.promises.readdir(typeDir, {
-      withFileTypes: true,
+      withFileTypes: true
     });
-
     for (const entry of rootEntries) {
       const fullPath = path.join(typeDir, entry.name);
       if (entry.isDirectory()) {
@@ -774,7 +606,7 @@ router.post("/api/local/delete", async (req, res) => {
         const folderSeason = seasonMatch ? parseInt(seasonMatch[1], 10) : null;
         try {
           const subEntries = await fs.promises.readdir(fullPath, {
-            withFileTypes: true,
+            withFileTypes: true
           });
           for (const sub of subEntries) {
             if (sub.isFile()) {
@@ -782,24 +614,23 @@ router.post("/api/local/delete", async (req, res) => {
                 name: sub.name,
                 fullPath: path.join(fullPath, sub.name),
                 folderSeason,
-                dirPath: fullPath,
+                dirPath: fullPath
               });
             }
           }
-        } catch (_) {}
+        } catch (_) {
+        }
       } else if (entry.isFile()) {
         candidateFiles.push({
           name: entry.name,
           fullPath,
           folderSeason: null,
-          dirPath: typeDir,
+          dirPath: typeDir
         });
       }
     }
-
     let deletedCount = 0;
-    const modifiedDirs = new Set();
-
+    const modifiedDirs = /* @__PURE__ */ new Set();
     for (const target of targets) {
       const filesToDelete = candidateFiles.filter((cand) => {
         if (type === "Anime" || type === "Movies") {
@@ -807,35 +638,22 @@ router.post("/api/local/delete", async (req, res) => {
             return false;
           }
           let epNum = getEpisodeNumberFromFilename(cand.name);
-          if (
-            epNum === null &&
-            type === "Movies" &&
-            target.number === 1 &&
-            !cand.name.match(/[Ss]\d+[Ee]\d+/i)
-          ) {
+          if (epNum === null && type === "Movies" && target.number === 1 && !cand.name.match(/[Ss]\d+[Ee]\d+/i)) {
             epNum = 1;
           }
           if (epNum !== target.number) return false;
-
-          // If season is known for target, match against filename or folder season
-          if (target.season !== null && target.season !== undefined) {
+          if (target.season !== null && target.season !== void 0) {
             const sMatch = cand.name.match(/\bS(\d{1,3})E(?:p)?(\d+)\b/i);
-            const fileSeason = sMatch
-              ? parseInt(sMatch[1], 10)
-              : cand.folderSeason;
+            const fileSeason = sMatch ? parseInt(sMatch[1], 10) : cand.folderSeason;
             if (fileSeason !== null && fileSeason !== target.season) {
               return false;
             }
           }
           return true;
         } else {
-          return (
-            isMangaFile(cand.name) &&
-            getChapterNumberFromFilename(cand.name) === target.number
-          );
+          return isMangaFile(cand.name) && getChapterNumberFromFilename(cand.name) === target.number;
         }
       });
-
       for (const fileToDelete of filesToDelete) {
         try {
           if (fs.existsSync(fileToDelete.fullPath)) {
@@ -848,26 +666,22 @@ router.post("/api/local/delete", async (req, res) => {
         } catch (e) {
           if (e.code !== "ENOENT") {
             logger.warn(
-              `Failed to delete file ${fileToDelete.fullPath}: ${e.message}`,
+              `Failed to delete file ${fileToDelete.fullPath}: ${e.message}`
             );
           }
         }
       }
-
       if (type === "Anime") {
-        const cleanNum = Number.isInteger(target.number)
-          ? Math.trunc(target.number)
-          : target.number;
+        const cleanNum = Number.isInteger(target.number) ? Math.trunc(target.number) : target.number;
         try {
           await run(
             "DELETE FROM SkipTimes WHERE (anime_id = ? OR anime_id LIKE ?) AND (episode_number = ? OR episode_number = ?)",
-            [id, `${id}-%`, cleanNum, target.number],
+            [id, `${id}-%`, cleanNum, target.number]
           );
-        } catch (_) {}
+        } catch (_) {
+        }
       }
     }
-
-    // Clean up empty season subdirectories if all their files were deleted
     for (const dir of modifiedDirs) {
       try {
         const remaining = await fs.promises.readdir(dir);
@@ -875,52 +689,42 @@ router.post("/api/local/delete", async (req, res) => {
           await fs.promises.rmdir(dir);
           logger.info(`Removed empty season subfolder: ${dir}`);
         }
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
     if (type === "Anime") {
       try {
-        const remainingFiles = await fs.promises
-          .readdir(typeDir)
-          .catch(() => []);
+        const remainingFiles = await fs.promises.readdir(typeDir).catch(() => []);
         const remainingVideos = remainingFiles.filter(isVideoFile);
         if (remainingVideos.length === 0) {
           await run(
             "DELETE FROM SkipTimes WHERE anime_id = ? OR anime_id LIKE ?",
-            [id, `${id}-%`],
+            [id, `${id}-%`]
           );
         }
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
     await cleanupEmptyDownloadFolder(typeDir, type, id);
-
-    const label =
-      type === "Manga"
-        ? "chapter(s)"
-        : type === "Movies"
-          ? "movie/episode(s)"
-          : "episode(s)";
+    const label = type === "Manga" ? "chapter(s)" : type === "Movies" ? "movie/episode(s)" : "episode(s)";
     return res.json({
       error: false,
-      message: `Successfully deleted ${deletedCount} ${label}`,
+      message: `Successfully deleted ${deletedCount} ${label}`
     });
   } catch (err) {
     logger.error(`Error in /api/local/delete: ${err.message}`);
     return res.json({ error: true, message: err.message });
   }
 });
-
 async function openPathInSystem(targetPath, openFolder = false) {
   let electron;
   try {
     electron = require("electron");
-  } catch (e) {}
-
+  } catch (e) {
+  }
   if (electron && electron.shell) {
     if (openFolder) {
-      const isDir =
-        fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory();
+      const isDir = fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory();
       if (isDir) {
         await electron.shell.openPath(targetPath);
       } else {
@@ -940,9 +744,7 @@ async function openPathInSystem(targetPath, openFolder = false) {
     }
     return true;
   }
-
   global.sendToRenderer("open-file", { path: targetPath, openFolder });
-
   if (fs.existsSync(targetPath)) {
     const isDir = fs.statSync(targetPath).isDirectory();
     if (isWindows) {
@@ -966,11 +768,8 @@ async function openPathInSystem(targetPath, openFolder = false) {
       }
     }
   }
-
   return true;
 }
-
-// Open Local File or Folder in File Explorer / OS viewer
 router.post("/api/local/open", async (req, res) => {
   try {
     let {
@@ -980,11 +779,10 @@ router.post("/api/local/open", async (req, res) => {
       subdub,
       action = "open_folder",
       customPath,
-      season = null,
+      season = null
     } = req.body;
     type = normalizeLibraryType(type, id);
     let targetPath = customPath || "";
-
     if (!targetPath) {
       const baseDir = await getBaseDownloadDir(type);
       if (!id) {
@@ -1016,7 +814,8 @@ router.post("/api/local/open", async (req, res) => {
                 searchDir = sFound;
                 targetPath = sFound;
               }
-            } catch (_) {}
+            } catch (_) {
+            }
           }
         }
         if (number != null && fs.existsSync(searchDir)) {
@@ -1032,11 +831,7 @@ router.post("/api/local/open", async (req, res) => {
             });
             if (!matchedFile && type === "Movies" && targetNum === 1) {
               matchedFile = files.find(
-                (file) =>
-                  !file.startsWith(".") &&
-                  !file.includes(".temp") &&
-                  isVideoFile(file) &&
-                  !file.match(/[Ss]\d+[Ee]\d+/i),
+                (file) => !file.startsWith(".") && !file.includes(".temp") && isVideoFile(file) && !file.match(/[Ss]\d+[Ee]\d+/i)
               );
             }
             if (matchedFile) {
@@ -1046,30 +841,26 @@ router.post("/api/local/open", async (req, res) => {
         }
       }
     }
-
     if (!targetPath || !fs.existsSync(targetPath)) {
       throw new Error(
-        `File or directory does not exist: ${targetPath || "Unknown path"}`,
+        `File or directory does not exist: ${targetPath || "Unknown path"}`
       );
     }
-
     await openPathInSystem(targetPath, action === "open_folder");
     return res.json({
       error: false,
       path: targetPath,
-      message: "Opened successfully",
+      message: "Opened successfully"
     });
   } catch (err) {
     logger.error(`Error in /api/local/open: ${err.message}`);
     return res.json({ error: true, message: err.message });
   }
 });
-
-// Update history progress
 router.post("/api/history/update", async (req, res) => {
   try {
     let { mediaId, type, number } = req.body;
-    if (!mediaId || !type || number === undefined || number === null) {
+    if (!mediaId || !type || number === void 0 || number === null) {
       throw new Error("Missing parameters for history update");
     }
     req.body.type = normalizeLibraryType(type, mediaId);
@@ -1079,8 +870,6 @@ router.post("/api/history/update", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Bulk mark items as read or unread
 router.post("/api/history/mark-read", async (req, res) => {
   try {
     let {
@@ -1094,36 +883,22 @@ router.post("/api/history/mark-read", async (req, res) => {
       provider,
       image,
       malid,
-      timestamp,
+      timestamp
     } = req.body;
-
     type = normalizeLibraryType(type, mediaId);
-
-    const targetItems =
-      Array.isArray(items) && items.length > 0
-        ? items
-        : Array.isArray(numbers)
-          ? numbers.map((n) =>
-              typeof n === "object" && n !== null
-                ? n
-                : { number: n, season: season || 1 },
-            )
-          : [];
-
+    const targetItems = Array.isArray(items) && items.length > 0 ? items : Array.isArray(numbers) ? numbers.map(
+      (n) => typeof n === "object" && n !== null ? n : { number: n, season: season || 1 }
+    ) : [];
     if (!mediaId || !type || targetItems.length === 0) {
       throw new Error("Missing parameters for bulk history update");
     }
-
-    const nowIso = timestamp
-      ? new Date(timestamp).toISOString()
-      : new Date().toISOString();
-
+    const nowIso = timestamp ? new Date(timestamp).toISOString() : (/* @__PURE__ */ new Date()).toISOString();
     for (const it of targetItems) {
       await updateHistory({
         mediaId,
         type,
         number: it.number,
-        season: it.season !== undefined ? it.season : season || 1,
+        season: it.season !== void 0 ? it.season : season || 1,
         title,
         provider,
         image,
@@ -1132,17 +907,14 @@ router.post("/api/history/mark-read", async (req, res) => {
         currentTime: isCompleted ? 1 : 0,
         duration: 1,
         timeSpent: isCompleted ? 10 : 0,
-        timestamp: nowIso,
+        timestamp: nowIso
       });
     }
-
     res.json({ success: true, count: targetItems.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Edit specific history entry (timestamp, progress, completion)
 router.post("/api/history/edit-entry", async (req, res) => {
   try {
     let {
@@ -1156,55 +928,38 @@ router.post("/api/history/edit-entry", async (req, res) => {
       title,
       provider,
       image,
-      malid,
+      malid
     } = req.body;
-    if (!mediaId || !type || number === undefined) {
+    if (!mediaId || !type || number === void 0) {
       throw new Error("Missing parameters for history edit");
     }
     type = normalizeLibraryType(type, mediaId);
-
     const isVideo = type === "Anime" || type === "Movies";
     const isMovies = type === "Movies";
-    const historyTable = isMovies
-      ? "SeriesMovieWatchHistory"
-      : isVideo
-        ? "WatchHistory"
-        : "ReadHistory";
+    const historyTable = isMovies ? "SeriesMovieWatchHistory" : isVideo ? "WatchHistory" : "ReadHistory";
     const idField = isMovies ? "movie_id" : isVideo ? "anime_id" : "manga_id";
     const numberField = isVideo ? "episode_number" : "chapter_number";
     const currentField = isVideo ? "current_time" : "current_page";
     const totalField = isVideo ? "duration" : "total_pages";
     const timeField = isVideo ? "last_watched" : "last_read";
-
     const cur = parseFloat(currentPageOrTime) || (isCompleted ? 1 : 0);
     const tot = parseFloat(totalPagesOrTime) || 1;
     const comp = isCompleted ? 1 : 0;
-    const timeIso = timestamp
-      ? new Date(timestamp).toISOString()
-      : new Date().toISOString();
+    const timeIso = timestamp ? new Date(timestamp).toISOString() : (/* @__PURE__ */ new Date()).toISOString();
     const compAt = isCompleted ? timeIso : null;
-
-    const parsedSeason = isMovies
-      ? req.body.season
-        ? parseInt(req.body.season, 10)
-        : 1
-      : null;
-    const seasonClause = isMovies
-      ? ` AND (season = ? OR (? = 1 AND season IS NULL))`
-      : ``;
+    const parsedSeason = isMovies ? req.body.season ? parseInt(req.body.season, 10) : 1 : null;
+    const seasonClause = isMovies ? ` AND (season = ? OR (? = 1 AND season IS NULL))` : ``;
     const seasonParams = isMovies ? [parsedSeason, parsedSeason] : [];
-
     const existing = await queryOne(
       `SELECT id FROM ${historyTable} WHERE ${idField} = ? AND (${numberField} = ? OR CAST(${numberField} AS REAL) = ?)${seasonClause} LIMIT 1`,
-      [mediaId, number, number, ...seasonParams],
+      [mediaId, number, number, ...seasonParams]
     );
-
     if (existing) {
       await run(
         `UPDATE ${historyTable} 
          SET ${currentField} = ?, ${totalField} = ?, is_completed = ?, ${timeField} = ?, completed_at = ?, hidden = 0 
          WHERE id = ?`,
-        [cur, tot, comp, timeIso, compAt, existing.id],
+        [cur, tot, comp, timeIso, compAt, existing.id]
       );
     } else {
       await updateHistory({
@@ -1220,17 +975,14 @@ router.post("/api/history/edit-entry", async (req, res) => {
         duration: tot,
         timeSpent: isCompleted ? 10 : 0,
         timestamp: timeIso,
-        season: parsedSeason,
+        season: parsedSeason
       });
     }
-
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Clear all history records
 router.post("/api/history/clear", async (req, res) => {
   try {
     const { type } = req.body || {};
@@ -1250,26 +1002,17 @@ router.post("/api/history/clear", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Delete specific tracking history record
 router.delete("/api/history/:type/:id", async (req, res) => {
   try {
     let { type, id } = req.params;
     type = normalizeLibraryType(type, id);
-    const historyTable =
-      type === "Movies"
-        ? "SeriesMovieWatchHistory"
-        : type === "Anime"
-          ? "WatchHistory"
-          : "ReadHistory";
+    const historyTable = type === "Movies" ? "SeriesMovieWatchHistory" : type === "Anime" ? "WatchHistory" : "ReadHistory";
     await run(`DELETE FROM ${historyTable} WHERE id = ?`, [id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Hide tracking record from shelf
 router.post("/api/history/hide", async (req, res) => {
   try {
     let { mediaId, type, malId, title, unhide } = req.body;
@@ -1277,113 +1020,72 @@ router.post("/api/history/hide", async (req, res) => {
       throw new Error("Missing parameters");
     }
     type = normalizeLibraryType(type, mediaId);
-
     const isVideo = type === "Anime" || type === "Movies";
     const isMovies = type === "Movies";
-    const historyTable = isMovies
-      ? "SeriesMovieWatchHistory"
-      : isVideo
-        ? "WatchHistory"
-        : "ReadHistory";
+    const historyTable = isMovies ? "SeriesMovieWatchHistory" : isVideo ? "WatchHistory" : "ReadHistory";
     const idField = isMovies ? "movie_id" : isVideo ? "anime_id" : "manga_id";
-    const titleField = isMovies
-      ? "title"
-      : isVideo
-        ? "anime_title"
-        : "manga_title";
-    const mainTable =
-      type === "Anime" ? "Anime" : isMovies ? "Movies" : "Manga";
+    const titleField = isMovies ? "title" : isVideo ? "anime_title" : "manga_title";
+    const mainTable = type === "Anime" ? "Anime" : isMovies ? "Movies" : "Manga";
     const hiddenVal = unhide ? 0 : 1;
-
     let queryIds = [mediaId];
-
     if (malId) {
-      const siblings = await global.db
-        .prepare(`SELECT id FROM ${mainTable} WHERE MalID = ?`)
-        .all(String(malId));
+      const siblings = await global.db.prepare(`SELECT id FROM ${mainTable} WHERE MalID = ?`).all(String(malId));
       siblings.forEach((s) => {
         if (s.id) queryIds.push(s.id);
       });
     }
-
     if (isVideo) {
       queryIds = Array.from(new Set(queryIds));
     }
-
     const placeholders = queryIds.map(() => "?").join(",");
-    await global.db
-      .prepare(
-        `UPDATE ${historyTable} SET hidden = ? WHERE ${idField} IN (${placeholders})`,
-      )
-      .run(hiddenVal, ...queryIds);
-
+    await global.db.prepare(
+      `UPDATE ${historyTable} SET hidden = ? WHERE ${idField} IN (${placeholders})`
+    ).run(hiddenVal, ...queryIds);
     if (title) {
-      await global.db
-        .prepare(
-          `UPDATE ${historyTable} SET hidden = ? WHERE LOWER(${titleField}) = LOWER(?)`,
-        )
-        .run(hiddenVal, title);
+      await global.db.prepare(
+        `UPDATE ${historyTable} SET hidden = ? WHERE LOWER(${titleField}) = LOWER(?)`
+      ).run(hiddenVal, title);
     }
-
     res.json({ success: true, hidden: hiddenVal });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Explicit unhide tracking record route
 router.post("/api/history/unhide", async (req, res) => {
   req.body.unhide = true;
   return router.handle(req, res);
 });
-
-// Fetch progress history for specific title
 router.get("/api/history/progress", async (req, res) => {
   try {
     let { mediaId, type } = req.query;
     if (!mediaId || !type) throw new Error("Missing parameters");
     type = normalizeLibraryType(type, mediaId);
-
     const isVideo = type === "Anime" || type === "Movies";
     const isMovies = type === "Movies";
-    const mainTable =
-      type === "Anime" ? "Anime" : isMovies ? "Movies" : "Manga";
-    const historyTable = isMovies
-      ? "SeriesMovieWatchHistory"
-      : isVideo
-        ? "WatchHistory"
-        : "ReadHistory";
+    const mainTable = type === "Anime" ? "Anime" : isMovies ? "Movies" : "Manga";
+    const historyTable = isMovies ? "SeriesMovieWatchHistory" : isVideo ? "WatchHistory" : "ReadHistory";
     const idCol = isMovies ? "movie_id" : isVideo ? "anime_id" : "manga_id";
-    const titleCol = isMovies
-      ? "title"
-      : isVideo
-        ? "anime_title"
-        : "manga_title";
+    const titleCol = isMovies ? "title" : isVideo ? "anime_title" : "manga_title";
     const numCol = isVideo ? "episode_number" : "chapter_number";
     const currentCol = isVideo ? "current_time" : "current_page";
     const dateCol = isVideo ? "last_watched" : "last_read";
-
     let suggestedNumber = null;
     let lastProgress = null;
     let hasBefore = false;
     let episodesStatus = [];
     let chaptersStatus = [];
-
     let queryIds = [mediaId];
     let resolvedTitle = null;
     try {
-      const localRec =
-        type === "Movies"
-          ? await queryOne(`SELECT title FROM Movies WHERE id = ?`, [mediaId])
-          : await queryOne(
-              `SELECT MalID, title FROM ${mainTable} WHERE id = ?`,
-              [mediaId],
-            );
+      const localRec = type === "Movies" ? await queryOne(`SELECT title FROM Movies WHERE id = ?`, [mediaId]) : await queryOne(
+        `SELECT MalID, title FROM ${mainTable} WHERE id = ?`,
+        [mediaId]
+      );
       if (localRec) {
         if (localRec.MalID) {
           const siblings = await queryAll(
             `SELECT id FROM ${mainTable} WHERE MalID = ?`,
-            [localRec.MalID],
+            [localRec.MalID]
           );
           siblings.forEach((s) => {
             if (s.id) queryIds.push(s.id);
@@ -1393,9 +1095,9 @@ router.get("/api/history/progress", async (req, res) => {
           resolvedTitle = localRec.title;
         }
       }
-    } catch (err) {}
+    } catch (err) {
+    }
     queryIds = Array.from(new Set(queryIds));
-
     const placeholders = queryIds.map(() => "?").join(",");
     let sql = `SELECT * FROM ${historyTable} WHERE ${idCol} IN (${placeholders})`;
     let params = [...queryIds];
@@ -1403,243 +1105,174 @@ router.get("/api/history/progress", async (req, res) => {
       sql += ` OR LOWER(${titleCol}) = LOWER(?)`;
       params.push(resolvedTitle);
     }
-
     const history = await queryAll(sql, params);
-
     if (history.length > 0) {
       hasBefore = true;
-
-      // Group records by chapter/episode number, keeping the newest entry per number
-      const numMap = new Map();
+      const numMap = /* @__PURE__ */ new Map();
       for (const h of history) {
         const num = Number(h[numCol]);
         if (!isNaN(num)) {
-          const key =
-            isVideo && type === "Movies" ? `s${h.season || 1}_e${num}` : num;
+          const key = isVideo && type === "Movies" ? `s${h.season || 1}_e${num}` : num;
           if (!numMap.has(key)) {
             numMap.set(key, h);
           } else {
             const existing = numMap.get(key);
-            if (
-              new Date(h[dateCol]).getTime() >
-              new Date(existing[dateCol]).getTime()
-            ) {
+            if (new Date(h[dateCol]).getTime() > new Date(existing[dateCol]).getTime()) {
               numMap.set(key, h);
             }
           }
         }
       }
-
       const uniqueRecords = Array.from(numMap.values());
-
-      // In-progress records (started reading/watching, not completed)
       const inProgressRecords = uniqueRecords.filter(
-        (h) =>
-          h.is_completed === 0 &&
-          (Number(h[currentCol]) > 0 || Number(h.time_spent) > 0),
+        (h) => h.is_completed === 0 && (Number(h[currentCol]) > 0 || Number(h.time_spent) > 0)
       );
-
-      // Completed records
       const completedRecords = uniqueRecords.filter(
-        (h) => h.is_completed === 1,
+        (h) => h.is_completed === 1
       );
-
       let targetRecord = null;
       let targetSuggestedNum = null;
-
       if (inProgressRecords.length > 0) {
-        // Sort in-progress by number descending
         inProgressRecords.sort((a, b) => Number(b[numCol]) - Number(a[numCol]));
         const highestInProgress = inProgressRecords[0];
-
-        const maxCompletedNum =
-          completedRecords.length > 0
-            ? Math.max(...completedRecords.map((h) => Number(h[numCol])))
-            : -1;
-
+        const maxCompletedNum = completedRecords.length > 0 ? Math.max(...completedRecords.map((h) => Number(h[numCol]))) : -1;
         if (Number(highestInProgress[numCol]) >= maxCompletedNum) {
-          // Normal forward reading: user is currently inside this chapter/episode
           targetRecord = highestInProgress;
           targetSuggestedNum = Number(highestInProgress[numCol]);
         } else {
-          // In-progress number is lower than max completed number:
-          // Check if user is actively re-reading (timestamp is much newer than completed)
           const highestCompRec = completedRecords.find(
-            (h) => Number(h[numCol]) === maxCompletedNum,
+            (h) => Number(h[numCol]) === maxCompletedNum
           );
           const inProgTime = new Date(highestInProgress[dateCol]).getTime();
-          const compTime = highestCompRec
-            ? new Date(highestCompRec[dateCol]).getTime()
-            : 0;
-          if (inProgTime > compTime + 120000) {
+          const compTime = highestCompRec ? new Date(highestCompRec[dateCol]).getTime() : 0;
+          if (inProgTime > compTime + 12e4) {
             targetRecord = highestInProgress;
             targetSuggestedNum = Number(highestInProgress[numCol]);
           } else {
-            // User already completed higher chapters; resume next after highest completed
             targetRecord = highestCompRec;
             targetSuggestedNum = maxCompletedNum + 1;
           }
         }
       } else if (completedRecords.length > 0) {
-        // All read records are completed: continue with next chapter/episode after highest completed
         completedRecords.sort((a, b) => Number(b[numCol]) - Number(a[numCol]));
         targetRecord = completedRecords[0];
         targetSuggestedNum = Number(targetRecord[numCol]) + 1;
       } else {
-        // Fallback to most recently updated record
         history.sort(
-          (a, b) =>
-            new Date(b[dateCol]).getTime() - new Date(a[dateCol]).getTime(),
+          (a, b) => new Date(b[dateCol]).getTime() - new Date(a[dateCol]).getTime()
         );
         targetRecord = history[0];
-        targetSuggestedNum =
-          targetRecord.is_completed === 1
-            ? Number(targetRecord[numCol]) + 1
-            : Number(targetRecord[numCol]);
+        targetSuggestedNum = targetRecord.is_completed === 1 ? Number(targetRecord[numCol]) + 1 : Number(targetRecord[numCol]);
       }
-
       const latest = targetRecord || history[0];
-      lastProgress = isVideo
-        ? {
-            number: latest.episode_number,
-            season:
-              latest.season !== undefined && latest.season !== null
-                ? Number(latest.season)
-                : 1,
-            currentTime: latest.current_time,
-            duration: latest.duration,
-            isCompleted: latest.is_completed === 1,
-            subdub: latest.sub_dub || "sub",
-          }
-        : {
-            number: latest.chapter_number,
-            currentPage: latest.current_page,
-            totalPages: latest.total_pages,
-            isCompleted: latest.is_completed === 1,
-          };
-
-      suggestedNumber =
-        targetSuggestedNum !== null
-          ? targetSuggestedNum
-          : latest.is_completed === 1
-            ? latest[numCol] + 1
-            : latest[numCol];
+      lastProgress = isVideo ? {
+        number: latest.episode_number,
+        season: latest.season !== void 0 && latest.season !== null ? Number(latest.season) : 1,
+        currentTime: latest.current_time,
+        duration: latest.duration,
+        isCompleted: latest.is_completed === 1,
+        subdub: latest.sub_dub || "sub"
+      } : {
+        number: latest.chapter_number,
+        currentPage: latest.current_page,
+        totalPages: latest.total_pages,
+        isCompleted: latest.is_completed === 1
+      };
+      suggestedNumber = targetSuggestedNum !== null ? targetSuggestedNum : latest.is_completed === 1 ? latest[numCol] + 1 : latest[numCol];
     }
-
-    const mappedStatus = history.map((h) =>
-      isVideo
-        ? {
-            id: h.id,
-            number: h.episode_number,
-            season:
-              h.season !== undefined && h.season !== null
-                ? Number(h.season)
-                : 1,
-            isCompleted: h.is_completed === 1,
-            currentTime: h.current_time,
-            duration: h.duration,
-            subdub: h.sub_dub || "sub",
-            lastWatched: h.last_watched,
-            completedAt: h.completed_at,
-            timeSpent: h.time_spent,
-          }
-        : {
-            id: h.id,
-            number: h.chapter_number,
-            isCompleted: h.is_completed === 1,
-            currentPage: h.current_page,
-            totalPages: h.total_pages,
-            lastRead: h.last_read,
-            completedAt: h.completed_at,
-            timeSpent: h.time_spent,
-          },
+    const mappedStatus = history.map(
+      (h) => isVideo ? {
+        id: h.id,
+        number: h.episode_number,
+        season: h.season !== void 0 && h.season !== null ? Number(h.season) : 1,
+        isCompleted: h.is_completed === 1,
+        currentTime: h.current_time,
+        duration: h.duration,
+        subdub: h.sub_dub || "sub",
+        lastWatched: h.last_watched,
+        completedAt: h.completed_at,
+        timeSpent: h.time_spent
+      } : {
+        id: h.id,
+        number: h.chapter_number,
+        isCompleted: h.is_completed === 1,
+        currentPage: h.current_page,
+        totalPages: h.total_pages,
+        lastRead: h.last_read,
+        completedAt: h.completed_at,
+        timeSpent: h.time_spent
+      }
     );
-
     if (isVideo) {
       episodesStatus = mappedStatus;
     } else {
       chaptersStatus = mappedStatus;
     }
-
     res.json({
       hasProgress: hasBefore,
       lastProgress,
       suggestedNumber,
       episodesStatus,
       chaptersStatus,
-      lastSubDub: lastProgress?.subdub || "sub",
+      lastSubDub: lastProgress?.subdub || "sub"
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Fetch history statistics
 router.get("/api/history/stats", async (req, res) => {
   try {
-    const watchStats = (await global.db
-      .prepare(
-        `
+    const watchStats = await global.db.prepare(
+      `
       SELECT 
         COALESCE(SUM(time_spent), 0) AS total_seconds,
         COUNT(DISTINCT anime_id) AS distinct_anime,
         COUNT(CASE WHEN is_completed = 1 THEN 1 END) AS completed_anime_episodes
       FROM WatchHistory
-    `,
-      )
-      .get()) || {
+    `
+    ).get() || {
       total_seconds: 0,
       distinct_anime: 0,
-      completed_anime_episodes: 0,
+      completed_anime_episodes: 0
     };
-
-    const movieStats = (await global.db
-      .prepare(
-        `
+    const movieStats = await global.db.prepare(
+      `
       SELECT 
         COALESCE(SUM(time_spent), 0) AS total_seconds,
         COUNT(DISTINCT movie_id) AS distinct_movies_watched,
         COUNT(CASE WHEN is_completed = 1 THEN 1 END) AS completed_movie_episodes
       FROM SeriesMovieWatchHistory
-    `,
-      )
-      .get()) || {
+    `
+    ).get() || {
       total_seconds: 0,
       distinct_movies_watched: 0,
-      completed_movie_episodes: 0,
+      completed_movie_episodes: 0
     };
-
-    const readStats = (await global.db
-      .prepare(
-        `
+    const readStats = await global.db.prepare(
+      `
       SELECT 
         COALESCE(SUM(time_spent), 0) AS total_seconds,
         COUNT(DISTINCT manga_id) AS distinct_manga,
         COUNT(CASE WHEN is_completed = 1 THEN 1 END) AS completed_chapters
       FROM ReadHistory
-    `,
-      )
-      .get()) || { total_seconds: 0, distinct_manga: 0, completed_chapters: 0 };
-
+    `
+    ).get() || { total_seconds: 0, distinct_manga: 0, completed_chapters: 0 };
     let distinctMovies = 0;
     try {
-      const movieStatsRow = await global.db
-        .prepare(`SELECT COUNT(DISTINCT id) AS distinct_movies FROM Movies`)
-        .get();
+      const movieStatsRow = await global.db.prepare(`SELECT COUNT(DISTINCT id) AS distinct_movies FROM Movies`).get();
       distinctMovies = movieStatsRow?.distinct_movies || 0;
-    } catch (_) {}
-
+    } catch (_) {
+    }
     const animeSeconds = watchStats?.total_seconds || 0;
     const movieSeconds = movieStats?.total_seconds || 0;
     const completedAnime = watchStats?.completed_anime_episodes || 0;
     const completedMovie = movieStats?.completed_movie_episodes || 0;
-
     res.json({
       watchHours: parseFloat(((animeSeconds + movieSeconds) / 3600).toFixed(2)),
       animeWatchHours: parseFloat((animeSeconds / 3600).toFixed(2)),
       movieWatchHours: parseFloat((movieSeconds / 3600).toFixed(2)),
       readHours: parseFloat(
-        ((readStats?.total_seconds || 0) / 3600).toFixed(2),
+        ((readStats?.total_seconds || 0) / 3600).toFixed(2)
       ),
       completedEpisodes: completedAnime + completedMovie,
       completedAnimeEpisodes: completedAnime,
@@ -1647,29 +1280,19 @@ router.get("/api/history/stats", async (req, res) => {
       completedChapters: readStats?.completed_chapters || 0,
       distinctAnime: watchStats?.distinct_anime || 0,
       distinctManga: readStats?.distinct_manga || 0,
-      distinctMovies:
-        distinctMovies || movieStats?.distinct_movies_watched || 0,
+      distinctMovies: distinctMovies || movieStats?.distinct_movies_watched || 0
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-async function resolveHistoryCoverImage(
-  mediaId,
-  title,
-  type = "Anime",
-  _malId = null,
-  rawScraperImg = null,
-  rawMalImg = null,
-) {
+async function resolveHistoryCoverImage(mediaId, title, type = "Anime", _malId = null, rawScraperImg = null, rawMalImg = null) {
   let localSrc = null;
-
   const urlsToCheck = [rawMalImg, rawScraperImg].filter(Boolean);
   for (const url of urlsToCheck) {
     try {
       const cached = queryOne("SELECT filename FROM ImageCache WHERE url = ?", [
-        url,
+        url
       ]);
       if (cached) {
         const cacheDir = ImageCacheManager.getImageCacheDir();
@@ -1678,64 +1301,44 @@ async function resolveHistoryCoverImage(
           break;
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
   if (!localSrc && title) {
     try {
       const dirPath = await GetDir(title, null, type, mediaId);
       if (fs.existsSync(dirPath)) {
         const files = fs.readdirSync(dirPath);
-        const coverFile = files.find((f) =>
-          /^(cover|poster|folder)\.(jpg|jpeg|png|webp)$/i.test(f),
+        const coverFile = files.find(
+          (f) => /^(cover|poster|folder)\.(jpg|jpeg|png|webp)$/i.test(f)
         );
         if (coverFile) {
           const p = path.join(dirPath, coverFile);
           localSrc = `/api/image?url=${encodeURIComponent("file://" + p)}`;
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
-  const malSrc = rawMalImg
-    ? `/api/image?url=${encodeURIComponent(rawMalImg)}`
-    : null;
-
-  const scraperSrc = rawScraperImg
-    ? `/api/image?url=${encodeURIComponent(rawScraperImg)}`
-    : null;
-
+  const malSrc = rawMalImg ? `/api/image?url=${encodeURIComponent(rawMalImg)}` : null;
+  const scraperSrc = rawScraperImg ? `/api/image?url=${encodeURIComponent(rawScraperImg)}` : null;
   return {
     image: localSrc || malSrc || scraperSrc || "/images/image-404.png",
     local_image: localSrc,
     mal_image: malSrc,
     scraper_image: scraperSrc,
-    fallback_image: "/images/image-404.png",
+    fallback_image: "/images/image-404.png"
   };
 }
-
-// Fetch history list
 router.get("/api/history/list", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || 50);
-    const shelfOnly =
-      req.query.shelf === "true" ||
-      req.query.shelf_only === "true" ||
-      req.query.include_hidden === "false";
-    const watchWhereClause = shelfOnly
-      ? "WHERE (w.hidden IS NULL OR w.hidden = 0)"
-      : "";
-    const movieWhereClause = shelfOnly
-      ? "WHERE (m.hidden IS NULL OR m.hidden = 0)"
-      : "";
-    const readWhereClause = shelfOnly
-      ? "WHERE (r.hidden IS NULL OR r.hidden = 0)"
-      : "";
-
-    const watchLogs =
-      (await global.db
-        .prepare(
-          `
+    const shelfOnly = req.query.shelf === "true" || req.query.shelf_only === "true" || req.query.include_hidden === "false";
+    const watchWhereClause = shelfOnly ? "WHERE (w.hidden IS NULL OR w.hidden = 0)" : "";
+    const movieWhereClause = shelfOnly ? "WHERE (m.hidden IS NULL OR m.hidden = 0)" : "";
+    const readWhereClause = shelfOnly ? "WHERE (r.hidden IS NULL OR r.hidden = 0)" : "";
+    const watchLogs = await global.db.prepare(
+      `
         SELECT 
           w.id,
           'Anime' AS type,
@@ -1763,14 +1366,10 @@ router.get("/api/history/list", async (req, res) => {
         ${watchWhereClause}
         ORDER BY w.last_watched DESC
         LIMIT ?
-      `,
-        )
-        .all(limit)) || [];
-
-    const movieLogs =
-      (await global.db
-        .prepare(
-          `
+      `
+    ).all(limit) || [];
+    const movieLogs = await global.db.prepare(
+      `
         SELECT 
           m.id,
           'Movies' AS type,
@@ -1797,14 +1396,10 @@ router.get("/api/history/list", async (req, res) => {
         ${movieWhereClause}
         ORDER BY m.last_watched DESC
         LIMIT ?
-      `,
-        )
-        .all(limit)) || [];
-
-    const readLogs =
-      (await global.db
-        .prepare(
-          `
+      `
+    ).all(limit) || [];
+    const readLogs = await global.db.prepare(
+      `
         SELECT 
           r.id,
           'Manga' AS type,
@@ -1832,14 +1427,9 @@ router.get("/api/history/list", async (req, res) => {
         ${readWhereClause}
         ORDER BY r.last_read DESC
         LIMIT ?
-      `,
-        )
-        .all(limit)) || [];
-
-    const combined = [...watchLogs, ...movieLogs, ...readLogs]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, limit);
-
+      `
+    ).all(limit) || [];
+    const combined = [...watchLogs, ...movieLogs, ...readLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, limit);
     for (const log of combined) {
       const coverRes = await resolveHistoryCoverImage(
         log.media_id,
@@ -1847,39 +1437,25 @@ router.get("/api/history/list", async (req, res) => {
         log.type,
         log.mal_id,
         log.image_url,
-        log.mal_image,
+        log.mal_image
       );
       delete log.image_url;
       Object.assign(log, coverRes);
-
       if (log.type === "Movies") {
         let episodes = null;
         if (log.episodes_json) {
           try {
             episodes = JSON.parse(log.episodes_json);
-          } catch (_) {}
+          } catch (_) {
+          }
         }
-
-        if (
-          episodes &&
-          typeof episodes === "object" &&
-          !Array.isArray(episodes)
-        ) {
+        if (episodes && typeof episodes === "object" && !Array.isArray(episodes)) {
           const currentSeason = log.season ? Number(log.season) : 1;
           const currentNum = Number(log.number) || 1;
-
-          // Season count map: { "1": 22, "2": 22 }
-          const seasons = Object.keys(episodes)
-            .map(Number)
-            .filter((n) => !isNaN(n))
-            .sort((a, b) => a - b);
+          const seasons = Object.keys(episodes).map(Number).filter((n) => !isNaN(n)).sort((a, b) => a - b);
           const totalForCurrentSeason = Number(episodes[currentSeason]) || 0;
-
           if (log.is_completed === 1) {
-            if (
-              totalForCurrentSeason > 0 &&
-              currentNum < totalForCurrentSeason
-            ) {
+            if (totalForCurrentSeason > 0 && currentNum < totalForCurrentSeason) {
               log.next_season = currentSeason;
               log.next_number = currentNum + 1;
               log.has_next = true;
@@ -1902,11 +1478,9 @@ router.get("/api/history/list", async (req, res) => {
       }
       delete log.episodes_json;
     }
-
     res.json(combined);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;

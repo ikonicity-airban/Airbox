@@ -1,6 +1,6 @@
 {
-  "appId": "app.strawverse.android",
-  "appName": "StrawVerse",
+  "appId": "app.airbox.android",
+  "appName": "Airbox",
   "webDir": "www",
   "server": {
     "androidScheme": "http",

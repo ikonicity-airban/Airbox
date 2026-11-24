@@ -2,27 +2,28 @@
 
 :root {
   color-scheme: dark;
-  --bg-primary: #0e0f12;
-  --bg-secondary: #16181f;
-  --bg-tertiary: #1f222d;
-  --accent: #7c3aed;
-  --accent-hover: #9061f9;
+  --bg-primary: #08090d;
+  --bg-secondary: #10131c;
+  --bg-tertiary: #161a26;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-glow: rgba(139, 92, 246, 0.35);
   --text-main: #f3f4f6;
   --text-muted: #9ca3af;
-  --border: #262936;
-  --glass: rgba(22, 24, 31, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.08);
+  --glass: rgba(16, 19, 28, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.07);
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
-  --shadow: rgba(0, 0, 0, 0.5);
-  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --sub-btn-color: #60a5fa;
-  --sub-btn-bg: rgba(59, 130, 246, 0.12);
-  --sub-btn-border: rgba(59, 130, 246, 0.3);
+  --shadow: rgba(0, 0, 0, 0.65);
+  --transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --sub-btn-color: #38bdf8;
+  --sub-btn-bg: rgba(56, 189, 248, 0.12);
+  --sub-btn-border: rgba(56, 189, 248, 0.28);
   --dub-btn-color: #f472b6;
   --dub-btn-bg: rgba(236, 72, 153, 0.12);
-  --dub-btn-border: rgba(236, 72, 153, 0.3);
+  --dub-btn-border: rgba(236, 72, 153, 0.28);
   --catalog-title-font-size: 14px;
   --catalog-title-lines: 2;
   --catalog-columns: auto;
@@ -32,6 +33,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-optical-sizing: auto;
   font-family:
     "Plus Jakarta Sans",
     -apple-system,
@@ -1876,5 +1878,26 @@ body:not(.swal2-toast-shown)
 .segmented-toggle-btn.active {
   background-color: var(--accent);
   color: white;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+/* Universal Skeleton Shimmer */
+@keyframes skeletonWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.015) 0%,
+    rgba(255, 255, 255, 0.045) 50%,
+    rgba(255, 255, 255, 0.015) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonWave 1.8s infinite ease-in-out;
+  border-radius: 6px;
 }

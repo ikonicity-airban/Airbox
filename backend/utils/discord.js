@@ -2,18 +2,17 @@ const {
   isAndroid,
   DISCORD_CLIENT_ID,
   GITHUB_REPO,
-  DISCORD_IDLE_MESSAGES,
+  DISCORD_IDLE_MESSAGES
 } = require("./constants");
-
 if (!process.versions?.electron || isAndroid) {
   module.exports = {
     StartDiscordRPC: async () => false,
     StopDiscordRPC: async () => false,
-    UpdateDiscordRPC: async () => {},
+    UpdateDiscordRPC: async () => {
+    }
   };
   return;
 }
-
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -21,42 +20,35 @@ const net = require("net");
 const RPC = require("discord-rpc");
 const { getKeyValue } = require("./db");
 const { logger } = require("./AppLogger");
-
 const isDiscordSupported = Boolean(process.versions?.electron && !isAndroid);
-
 let rpcClient = null;
 let rpcConnected = false;
-
 async function isDiscordRPCEnabled() {
   if (!isDiscordSupported || !RPC) return false;
   try {
-    return (await getKeyValue("Settings", "enableDiscordRPC")) === true;
+    return await getKeyValue("Settings", "enableDiscordRPC") === true;
   } catch (err) {
     logger.error("[DiscordRPC] Error reading enableDiscordRPC: " + err.message);
     return false;
   }
 }
-
 async function StartDiscordRPC() {
   if (!isDiscordSupported || !RPC) {
     logger.warn(
-      "[DiscordRPC] Discord RPC is not supported in this environment.",
+      "[DiscordRPC] Discord RPC is not supported in this environment."
     );
     return false;
   }
   const running = await isDiscordRunning();
   if (!running) {
     logger.warn(
-      "[DiscordRPC] Discord desktop app is not running in background.",
+      "[DiscordRPC] Discord desktop app is not running in background."
     );
     throw new Error("Discord is not open in the background!");
   }
-
   if (rpcConnected) return true;
-
   rpcClient = new RPC.Client({ transport: "ipc" });
   RPC.register(DISCORD_CLIENT_ID);
-
   return new Promise(async (resolve, reject) => {
     rpcClient.once("ready", () => {
       rpcConnected = true;
@@ -64,19 +56,17 @@ async function StartDiscordRPC() {
       UpdateDiscordRPC();
       resolve(true);
     });
-
     try {
       await rpcClient.login({ clientId: DISCORD_CLIENT_ID });
     } catch (err) {
       rpcConnected = false;
       logger.error("[DiscordRPC] Failed to login to Discord: " + err.message);
       reject(
-        new Error("Failed to login to Discord Rich Presence: " + err.message),
+        new Error("Failed to login to Discord Rich Presence: " + err.message)
       );
     }
   });
 }
-
 function isDiscordRunning() {
   return new Promise((resolve) => {
     let resolved = false;
@@ -86,26 +76,25 @@ function isDiscordRunning() {
       if (sock) sock.destroy();
       resolve(true);
     };
-
     if (os.platform() === "win32") {
-      let pending = 0;
+      let pending2 = 0;
       for (let i = 0; i < 10; i++) {
-        pending++;
+        pending2++;
         const socketPath = `\\\\?\\pipe\\discord-ipc-${i}`;
         try {
           const socket = net.connect(socketPath, () => markFound(socket));
           socket.setTimeout(600);
           socket.on("timeout", () => {
             socket.destroy();
-            pending--;
-            if (pending <= 0 && !resolved) resolve(false);
+            pending2--;
+            if (pending2 <= 0 && !resolved) resolve(false);
           });
           socket.on("error", () => {
-            pending--;
-            if (pending <= 0 && !resolved) resolve(false);
+            pending2--;
+            if (pending2 <= 0 && !resolved) resolve(false);
           });
         } catch (_) {
-          pending--;
+          pending2--;
         }
       }
       setTimeout(() => {
@@ -113,25 +102,19 @@ function isDiscordRunning() {
       }, 700);
       return;
     }
-
     const baseDirs = [
       process.env.XDG_RUNTIME_DIR,
       process.env.TMPDIR,
       process.env.TMP,
       process.env.TEMP,
       "/tmp",
-      process.env.XDG_RUNTIME_DIR
-        ? path.join(
-            process.env.XDG_RUNTIME_DIR,
-            "app",
-            "com.discordapp.Discord",
-          )
-        : null,
-      process.env.XDG_RUNTIME_DIR
-        ? path.join(process.env.XDG_RUNTIME_DIR, "snap.discord")
-        : null,
+      process.env.XDG_RUNTIME_DIR ? path.join(
+        process.env.XDG_RUNTIME_DIR,
+        "app",
+        "com.discordapp.Discord"
+      ) : null,
+      process.env.XDG_RUNTIME_DIR ? path.join(process.env.XDG_RUNTIME_DIR, "snap.discord") : null
     ].filter(Boolean);
-
     let candidates = [];
     for (const dir of baseDirs) {
       for (let i = 0; i < 10; i++) {
@@ -141,11 +124,9 @@ function isDiscordRunning() {
         }
       }
     }
-
     if (candidates.length === 0) {
       return resolve(false);
     }
-
     let pending = candidates.length;
     for (const socketPath of candidates) {
       try {
@@ -165,13 +146,11 @@ function isDiscordRunning() {
         if (pending <= 0 && !resolved) resolve(false);
       }
     }
-
     setTimeout(() => {
       if (!resolved) resolve(false);
     }, 700);
   });
 }
-
 async function StopDiscordRPC() {
   if (rpcClient) {
     try {
@@ -185,25 +164,14 @@ async function StopDiscordRPC() {
   }
   return false;
 }
-
-async function UpdateDiscordRPC(
-  Title = null,
-  Number = null,
-  Type = null,
-  Image = null,
-  MediaId = null,
-  CurrentTime = null,
-  Duration = null,
-  Season = null,
-) {
+async function UpdateDiscordRPC(Title = null, Number2 = null, Type = null, Image = null, MediaId = null, CurrentTime = null, Duration = null, Season = null) {
   if (!RPC || process.platform === "android") return;
-  if (!(await isDiscordRPCEnabled())) {
+  if (!await isDiscordRPCEnabled()) {
     if (rpcConnected) {
       await StopDiscordRPC();
     }
     return;
   }
-
   if (!rpcConnected) {
     const running = await isDiscordRunning();
     if (running) {
@@ -223,17 +191,11 @@ async function UpdateDiscordRPC(
       return;
     }
   }
-
   if (!rpcConnected || !rpcClient) return;
-
   let InDownloads = global.getQueueNumber();
-
-  let downloadSuffix =
-    InDownloads > 0 ? ` | downloading ${InDownloads} items` : "";
-
+  let downloadSuffix = InDownloads > 0 ? ` | downloading ${InDownloads} items` : "";
   let resolvedImage = "luffy";
   let imageToResolve = null;
-
   if (Image && typeof Image === "string" && Image.length > 0) {
     imageToResolve = Image;
   } else if (MediaId) {
@@ -242,16 +204,12 @@ async function UpdateDiscordRPC(
       imageToResolve = dbImage;
     }
   }
-
   if (imageToResolve) {
-    if (
-      imageToResolve.startsWith("http") ||
-      imageToResolve.startsWith("data:image/")
-    ) {
+    if (imageToResolve.startsWith("http") || imageToResolve.startsWith("data:image/")) {
       const uploadedUrl = await resolveAndUploadToCatbox(
         imageToResolve,
         MediaId,
-        Type,
+        Type
       );
       if (uploadedUrl && uploadedUrl.startsWith("http")) {
         resolvedImage = uploadedUrl;
@@ -260,59 +218,34 @@ async function UpdateDiscordRPC(
       }
     }
   }
-
-  if (
-    resolvedImage &&
-    resolvedImage.startsWith("http") &&
-    !resolvedImage.includes("catbox.moe")
-  ) {
+  if (resolvedImage && resolvedImage.startsWith("http") && !resolvedImage.includes("catbox.moe")) {
     resolvedImage = `https://images.weserv.nl/?url=${encodeURIComponent(resolvedImage)}`;
   }
-
   let Activity = {
     details: `Idle`,
-    state: `${
-      DISCORD_IDLE_MESSAGES[
-        Math.floor(Math.random() * DISCORD_IDLE_MESSAGES.length)
-      ]
-    }${downloadSuffix}`,
+    state: `${DISCORD_IDLE_MESSAGES[Math.floor(Math.random() * DISCORD_IDLE_MESSAGES.length)]}${downloadSuffix}`,
     largeImageKey: "luffy",
     largeImageText: "StrawVerse",
-    instance: false,
+    instance: false
   };
-
-  const malProfileEnabled =
-    (await getKeyValue("Settings", "malDiscordProfile")) === true;
-  const malUsername =
-    (await getKeyValue("Settings", "malUsername")) ||
-    global.malUsername ||
-    null;
-  const malProfileButton =
-    malProfileEnabled && malUsername
-      ? {
-          label: "My MAL Profile",
-          url: `https://myanimelist.net/profile/${encodeURIComponent(malUsername)}`,
-        }
-      : null;
-
+  const malProfileEnabled = await getKeyValue("Settings", "malDiscordProfile") === true;
+  const malUsername = await getKeyValue("Settings", "malUsername") || global.malUsername || null;
+  const malProfileButton = malProfileEnabled && malUsername ? {
+    label: "My MAL Profile",
+    url: `https://myanimelist.net/profile/${encodeURIComponent(malUsername)}`
+  } : null;
   if (Title) {
     if (Type === "Anime") {
       Activity.details = "Watching Anime";
-      const stateStr = `${Title} - Ep ${Number}${downloadSuffix}`;
-      Activity.state =
-        stateStr.length > 125
-          ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}`
-          : stateStr;
-
+      const stateStr = `${Title} - Ep ${Number2}${downloadSuffix}`;
+      Activity.state = stateStr.length > 125 ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}` : stateStr;
       const curTime = parseFloat(CurrentTime || 0);
       const dur = parseFloat(Duration || 0);
       if (dur > 0) {
-        Activity.startTimestamp = Math.round(Date.now() - curTime * 1000);
-        Activity.endTimestamp = Math.round(Date.now() + (dur - curTime) * 1000);
+        Activity.startTimestamp = Math.round(Date.now() - curTime * 1e3);
+        Activity.endTimestamp = Math.round(Date.now() + (dur - curTime) * 1e3);
       }
-
-      Activity.largeImageKey =
-        resolvedImage !== "luffy" ? resolvedImage : "luffy";
+      Activity.largeImageKey = resolvedImage !== "luffy" ? resolvedImage : "luffy";
       Activity.largeImageText = Title;
       if (resolvedImage !== "luffy") {
         Activity.smallImageKey = "luffy";
@@ -320,32 +253,17 @@ async function UpdateDiscordRPC(
       }
     } else if (Type === "Movies") {
       Activity.details = "Watching Movies & Series";
-      const seasonPrefix =
-        Season && parseInt(Season, 10) > 1 ? `S${Season} ` : "";
-      const epPrefix =
-        Number !== null &&
-        Number !== undefined &&
-        String(Number) !== "0" &&
-        String(Number) !== ""
-          ? `${seasonPrefix}Ep ${Number}`
-          : "";
-      const stateStr = epPrefix
-        ? `${Title} - ${epPrefix}${downloadSuffix}`
-        : `${Title}${downloadSuffix}`;
-      Activity.state =
-        stateStr.length > 125
-          ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}`
-          : stateStr;
-
+      const seasonPrefix = Season && parseInt(Season, 10) > 1 ? `S${Season} ` : "";
+      const epPrefix = Number2 !== null && Number2 !== void 0 && String(Number2) !== "0" && String(Number2) !== "" ? `${seasonPrefix}Ep ${Number2}` : "";
+      const stateStr = epPrefix ? `${Title} - ${epPrefix}${downloadSuffix}` : `${Title}${downloadSuffix}`;
+      Activity.state = stateStr.length > 125 ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}` : stateStr;
       const curTime = parseFloat(CurrentTime || 0);
       const dur = parseFloat(Duration || 0);
       if (dur > 0) {
-        Activity.startTimestamp = Math.round(Date.now() - curTime * 1000);
-        Activity.endTimestamp = Math.round(Date.now() + (dur - curTime) * 1000);
+        Activity.startTimestamp = Math.round(Date.now() - curTime * 1e3);
+        Activity.endTimestamp = Math.round(Date.now() + (dur - curTime) * 1e3);
       }
-
-      Activity.largeImageKey =
-        resolvedImage !== "luffy" ? resolvedImage : "luffy";
+      Activity.largeImageKey = resolvedImage !== "luffy" ? resolvedImage : "luffy";
       Activity.largeImageText = Title;
       if (resolvedImage !== "luffy") {
         Activity.smallImageKey = "luffy";
@@ -356,40 +274,29 @@ async function UpdateDiscordRPC(
       const curPage = parseInt(CurrentTime || 1);
       const totPages = parseInt(Duration || 1);
       const pageInfo = totPages > 0 ? ` (Page ${curPage}/${totPages})` : "";
-      const stateStr = `${Title} - Ch ${Number}${pageInfo}${downloadSuffix}`;
-      Activity.state =
-        stateStr.length > 125
-          ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}`
-          : stateStr;
-
-      Activity.largeImageKey =
-        resolvedImage !== "luffy" ? resolvedImage : "luffy";
+      const stateStr = `${Title} - Ch ${Number2}${pageInfo}${downloadSuffix}`;
+      Activity.state = stateStr.length > 125 ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}` : stateStr;
+      Activity.largeImageKey = resolvedImage !== "luffy" ? resolvedImage : "luffy";
       Activity.largeImageText = Title;
       if (resolvedImage !== "luffy") {
         Activity.smallImageKey = "luffy";
         Activity.smallImageText = "StrawVerse";
       }
     } else {
-      Activity.details =
-        Title.length > 125 ? `${Title.slice(0, 125)}...` : Title;
-      if (Number) {
-        const stateStr = `${Number}${downloadSuffix}`;
-        Activity.state =
-          stateStr.length > 125
-            ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}`
-            : stateStr;
+      Activity.details = Title.length > 125 ? `${Title.slice(0, 125)}...` : Title;
+      if (Number2) {
+        const stateStr = `${Number2}${downloadSuffix}`;
+        Activity.state = stateStr.length > 125 ? `${stateStr.slice(0, 125 - downloadSuffix.length - 3)}...${downloadSuffix}` : stateStr;
       }
     }
   }
-
   Activity.buttons = [
     {
       label: "Download StrawVerse App",
-      url: `https://github.com/${GITHUB_REPO}/releases/latest`,
+      url: `https://github.com/${GITHUB_REPO}/releases/latest`
     },
-    ...(malProfileButton ? [malProfileButton] : []),
+    ...malProfileButton ? [malProfileButton] : []
   ];
-
   try {
     rpcClient.setActivity(Activity);
   } catch (err) {
@@ -397,164 +304,128 @@ async function UpdateDiscordRPC(
     rpcClient = null;
   }
 }
-
 async function getMediaImage(mediaId, type) {
   try {
     let localRec = null;
     if (type === "Anime") {
-      // 1. Try finding malid from local Anime database record or mapping.db provider mapping
       let malid = null;
-      localRec = db
-        .prepare(
-          `
+      localRec = db.prepare(
+        `
         SELECT MalID, image_url FROM Anime 
         WHERE id = ? OR folder_name = ?
-      `,
-        )
-        .get(mediaId, mediaId);
+      `
+      ).get(mediaId, mediaId);
       if (localRec && localRec.MalID) {
         malid = Number(localRec.MalID);
       }
-
       if (!malid && global.mappingDb) {
         try {
-          const row = global.mappingDb
-            .prepare(
-              `
+          const row = global.mappingDb.prepare(
+            `
               SELECT malid FROM pahe WHERE uuid = ? OR id = ?
               UNION
               SELECT malid FROM anikoto WHERE id = ?
               UNION
               SELECT malid FROM anineko WHERE id = ?
               LIMIT 1
-            `,
-            )
-            .get(mediaId, mediaId, mediaId, mediaId);
+            `
+          ).get(mediaId, mediaId, mediaId, mediaId);
           if (row && row.malid) {
             malid = Number(row.malid);
           }
-        } catch (e) {}
+        } catch (e) {
+        }
       }
-
-      // 2. Check mapping.db anime table for image_url if malid exists
       if (malid && global.mappingDb) {
         try {
-          const mapRow = global.mappingDb
-            .prepare("SELECT image_url FROM anime WHERE malid = ?")
-            .get(malid);
-          if (
-            mapRow &&
-            mapRow.image_url &&
-            mapRow.image_url.startsWith("http")
-          ) {
+          const mapRow = global.mappingDb.prepare("SELECT image_url FROM anime WHERE malid = ?").get(malid);
+          if (mapRow && mapRow.image_url && mapRow.image_url.startsWith("http")) {
             return mapRow.image_url;
           }
-        } catch (e) {}
+        } catch (e) {
+        }
       }
-
       if (localRec) {
         if (localRec.image_url && localRec.image_url.startsWith("http")) {
           return localRec.image_url;
         }
         if (localRec.MalID) {
-          const malInfo = db
-            .prepare(`SELECT image FROM MyAnimeList WHERE id = ?`)
-            .get(String(localRec.MalID));
+          const malInfo = db.prepare(`SELECT image FROM MyAnimeList WHERE id = ?`).get(String(localRec.MalID));
           return malInfo?.image || null;
         }
       }
     } else if (type === "Manga") {
-      localRec = db
-        .prepare(
-          `SELECT MalID, image_url FROM Manga WHERE id = ? OR folder_name = ?`,
-        )
-        .get(mediaId, mediaId);
+      localRec = db.prepare(
+        `SELECT MalID, image_url FROM Manga WHERE id = ? OR folder_name = ?`
+      ).get(mediaId, mediaId);
       if (localRec) {
         if (localRec.image_url && localRec.image_url.startsWith("http")) {
           return localRec.image_url;
         }
         if (localRec.MalID) {
-          const malInfo = db
-            .prepare(`SELECT image FROM MyMangaList WHERE id = ?`)
-            .get(String(localRec.MalID));
+          const malInfo = db.prepare(`SELECT image FROM MyMangaList WHERE id = ?`).get(String(localRec.MalID));
           return malInfo?.image || null;
         }
       }
     } else if (type === "Movies") {
-      localRec = db
-        .prepare(`SELECT image_url FROM Movies WHERE id = ?`)
-        .get(mediaId);
-      if (
-        localRec &&
-        localRec.image_url &&
-        localRec.image_url.startsWith("http")
-      ) {
+      localRec = db.prepare(`SELECT image_url FROM Movies WHERE id = ?`).get(mediaId);
+      if (localRec && localRec.image_url && localRec.image_url.startsWith("http")) {
         return localRec.image_url;
       }
     }
-  } catch (err) {}
+  } catch (err) {
+  }
   return null;
 }
-
 async function resolveAndUploadToCatbox(imageUrl, mediaId, type) {
   if (!imageUrl || typeof imageUrl !== "string") return null;
-
-  // Check if mapping.db has image_url for this MAL ID before uploading to Catbox
   if ((type === "Anime" || !type) && global.mappingDb) {
     let malid = null;
     if (mediaId) {
       try {
-        const localRec = db
-          .prepare("SELECT MalID FROM Anime WHERE id = ? OR folder_name = ?")
-          .get(mediaId, mediaId);
+        const localRec = db.prepare("SELECT MalID FROM Anime WHERE id = ? OR folder_name = ?").get(mediaId, mediaId);
         if (localRec && localRec.MalID) {
           malid = Number(localRec.MalID);
         }
-      } catch (e) {}
-
+      } catch (e) {
+      }
       if (!malid) {
         try {
-          const row = global.mappingDb
-            .prepare(
-              `
+          const row = global.mappingDb.prepare(
+            `
               SELECT malid FROM pahe WHERE uuid = ? OR id = ?
               UNION
               SELECT malid FROM anikoto WHERE id = ?
               UNION
               SELECT malid FROM anineko WHERE id = ?
               LIMIT 1
-            `,
-            )
-            .get(mediaId, mediaId, mediaId, mediaId);
+            `
+          ).get(mediaId, mediaId, mediaId, mediaId);
           if (row && row.malid) {
             malid = Number(row.malid);
           }
-        } catch (e) {}
+        } catch (e) {
+        }
       }
     }
-
     if (malid) {
       try {
-        const mapRow = global.mappingDb
-          .prepare("SELECT image_url FROM anime WHERE malid = ?")
-          .get(malid);
+        const mapRow = global.mappingDb.prepare("SELECT image_url FROM anime WHERE malid = ?").get(malid);
         if (mapRow && mapRow.image_url && mapRow.image_url.startsWith("http")) {
           return mapRow.image_url;
         }
-      } catch (e) {}
+      } catch (e) {
+      }
     }
   }
-
   const cachedUrl = getCachedCatboxUrl(imageUrl);
   if (cachedUrl) {
     return cachedUrl;
   }
-
   if (imageUrl.includes("catbox.moe")) {
     setCachedCatboxUrl(imageUrl, imageUrl);
     return imageUrl;
   }
-
   if (imageUrl.startsWith("data:image/")) {
     try {
       const base64Data = imageUrl.split(";base64,").pop();
@@ -565,11 +436,9 @@ async function resolveAndUploadToCatbox(imageUrl, mediaId, type) {
         return catboxUrl;
       }
     } catch (e) {
-      // ignore
     }
     return imageUrl;
   }
-
   if (mediaId && type) {
     const dbImage = await getMediaImage(mediaId, type);
     if (dbImage && dbImage.includes("catbox.moe")) {
@@ -577,40 +446,31 @@ async function resolveAndUploadToCatbox(imageUrl, mediaId, type) {
       return dbImage;
     }
   }
-
   try {
     let fetchUrl = imageUrl.trim();
     if (fetchUrl.includes("/api/image?url=")) {
       fetchUrl = fetchUrl.split("/api/image?url=")[1];
     }
-
     const response = await global.axios.get(fetchUrl, {
-      responseType: "arraybuffer",
+      responseType: "arraybuffer"
     });
-
     const buffer = Buffer.from(response.data);
     const catboxUrl = await uploadToCatbox(buffer);
     if (catboxUrl) {
       setCachedCatboxUrl(imageUrl, catboxUrl);
-
       if (mediaId && type) {
         try {
           const table = type === "Anime" ? "Anime" : "Manga";
           let localRec = null;
           if (type === "Anime") {
-            localRec = db
-              .prepare(`SELECT id, image, image_url FROM Anime WHERE id = ?`)
-              .get(mediaId);
+            localRec = db.prepare(`SELECT id, image, image_url FROM Anime WHERE id = ?`).get(mediaId);
           } else {
-            localRec = db
-              .prepare(`SELECT id, image, image_url FROM Manga WHERE id = ?`)
-              .get(mediaId);
+            localRec = db.prepare(`SELECT id, image, image_url FROM Manga WHERE id = ?`).get(mediaId);
           }
-
           if (localRec) {
             const updates = [
               "image_url = ?",
-              "last_updated = CURRENT_TIMESTAMP",
+              "last_updated = CURRENT_TIMESTAMP"
             ];
             const params = [catboxUrl];
             if (!localRec.image || localRec.image === "") {
@@ -619,59 +479,59 @@ async function resolveAndUploadToCatbox(imageUrl, mediaId, type) {
               params.push(base64Image);
             }
             params.push(localRec.id);
-            global.db
-              .prepare(`UPDATE ${table} SET ${updates.join(", ")} WHERE id = ?`)
-              .run(...params);
+            global.db.prepare(`UPDATE ${table} SET ${updates.join(", ")} WHERE id = ?`).run(...params);
           }
         } catch (dbErr) {
-          // ignore
         }
       }
-
       return catboxUrl;
     }
   } catch (err) {
-    // ignore
   }
-
   return imageUrl;
 }
-
 async function uploadToCatbox(imageBuffer) {
   try {
-    const boundary =
-      "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
-
+    const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
     const response = await global.axios.post(
       "https://litterbox.catbox.moe/resources/internals/api.php",
       Buffer.concat([
         Buffer.from(
-          `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`,
-          "utf-8",
+          `--${boundary}\r
+Content-Disposition: form-data; name="reqtype"\r
+\r
+fileupload\r
+`,
+          "utf-8"
         ),
         Buffer.from(
-          `--${boundary}\r\nContent-Disposition: form-data; name="time"\r\n\r\n1h\r\n`,
-          "utf-8",
+          `--${boundary}\r
+Content-Disposition: form-data; name="time"\r
+\r
+1h\r
+`,
+          "utf-8"
         ),
         Buffer.from(
-          `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.png"\r\nContent-Type: image/png\r\n\r\n`,
-          "utf-8",
+          `--${boundary}\r
+Content-Disposition: form-data; name="fileToUpload"; filename="image.png"\r
+Content-Type: image/png\r
+\r
+`,
+          "utf-8"
         ),
         imageBuffer,
-        Buffer.from(`\r\n--${boundary}--\r\n`, "utf-8"),
+        Buffer.from(`\r
+--${boundary}--\r
+`, "utf-8")
       ]),
       {
         headers: {
-          "Content-Type": `multipart/form-data; boundary=${boundary}`,
-        },
-      },
+          "Content-Type": `multipart/form-data; boundary=${boundary}`
+        }
+      }
     );
-
-    if (
-      response.data &&
-      typeof response.data === "string" &&
-      response.data.startsWith("http")
-    ) {
+    if (response.data && typeof response.data === "string" && response.data.startsWith("http")) {
       return response.data.trim();
     }
   } catch (err) {
@@ -679,25 +539,18 @@ async function uploadToCatbox(imageBuffer) {
   }
   return null;
 }
-
 function getCachedCatboxUrl(originalUrl) {
   if (!originalUrl || typeof originalUrl !== "string") return null;
   try {
-    const row = global.db
-      .prepare(
-        "SELECT catbox_url, created_at FROM CatboxCache WHERE original_url = ?",
-      )
-      .get(originalUrl);
+    const row = global.db.prepare(
+      "SELECT catbox_url, created_at FROM CatboxCache WHERE original_url = ?"
+    ).get(originalUrl);
     if (!row) return null;
-
-    const oneHourMs = 3600000;
+    const oneHourMs = 36e5;
     if (!row.created_at || Date.now() - row.created_at > oneHourMs) {
       try {
-        global.db
-          .prepare("DELETE FROM CatboxCache WHERE original_url = ?")
-          .run(originalUrl);
+        global.db.prepare("DELETE FROM CatboxCache WHERE original_url = ?").run(originalUrl);
       } catch (err) {
-        // ignore
       }
       return null;
     }
@@ -706,22 +559,17 @@ function getCachedCatboxUrl(originalUrl) {
     return null;
   }
 }
-
 function setCachedCatboxUrl(originalUrl, catboxUrl) {
   if (!originalUrl || !catboxUrl) return;
   try {
-    global.db
-      .prepare(
-        "INSERT INTO CatboxCache (original_url, catbox_url, created_at) VALUES (?, ?, ?) ON CONFLICT(original_url) DO UPDATE SET catbox_url = excluded.catbox_url, created_at = excluded.created_at",
-      )
-      .run(originalUrl, catboxUrl, Date.now());
+    global.db.prepare(
+      "INSERT INTO CatboxCache (original_url, catbox_url, created_at) VALUES (?, ?, ?) ON CONFLICT(original_url) DO UPDATE SET catbox_url = excluded.catbox_url, created_at = excluded.created_at"
+    ).run(originalUrl, catboxUrl, Date.now());
   } catch (err) {
-    // ignore
   }
 }
-
 module.exports = {
   StartDiscordRPC,
   StopDiscordRPC,
-  UpdateDiscordRPC,
+  UpdateDiscordRPC
 };

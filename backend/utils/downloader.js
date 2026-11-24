@@ -2,18 +2,17 @@ const { spawn } = require("child_process");
 const http = require("http");
 const https = require("https");
 const { logger } = require("./AppLogger");
-
 const keepAliveAgent = {
   http: new http.Agent({
     keepAlive: true,
     maxSockets: 128,
-    keepAliveMsecs: 30000,
+    keepAliveMsecs: 3e4
   }),
   https: new https.Agent({
     keepAlive: true,
     maxSockets: 128,
-    keepAliveMsecs: 30000,
-  }),
+    keepAliveMsecs: 3e4
+  })
 };
 const iso6391 = require("iso-639-1");
 const path = require("path");
@@ -29,11 +28,9 @@ const {
   recordDomainBatchSuccess,
   isCircuitOpen,
   waitForCircuit,
-  setDomainErrorCap,
+  setDomainErrorCap
 } = require("./domainConcurrency");
-
 let mergeLockQueue = Promise.resolve();
-
 async function acquireMergeLock() {
   let release;
   const nextLock = new Promise((resolve) => {
@@ -44,15 +41,12 @@ async function acquireMergeLock() {
   await currentLock;
   return release;
 }
-
 let resolvedFfmpegPath = null;
-
 function resolveUrl(relativeUrl, baseUrl) {
   if (!relativeUrl) return relativeUrl;
   try {
     const baseObj = new URL(baseUrl);
     const resolvedObj = new URL(relativeUrl, baseUrl);
-
     if (!resolvedObj.search && baseObj.search) {
       resolvedObj.search = baseObj.search;
     }
@@ -61,40 +55,25 @@ function resolveUrl(relativeUrl, baseUrl) {
     return relativeUrl;
   }
 }
-
 function stripPngHeader(buffer) {
   if (!buffer || buffer.length < 8) return buffer;
-
-  if (
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  ) {
-    const iendOffset = buffer.indexOf(Buffer.from([0x49, 0x45, 0x4e, 0x44]));
+  if (buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71 && buffer[4] === 13 && buffer[5] === 10 && buffer[6] === 26 && buffer[7] === 10) {
+    const iendOffset = buffer.indexOf(Buffer.from([73, 69, 78, 68]));
     if (iendOffset !== -1 && iendOffset < 1024) {
       return buffer.subarray(iendOffset + 8);
     }
   }
   return buffer;
 }
-
 async function getFfmpegPath() {
   if (resolvedFfmpegPath && fs.existsSync(resolvedFfmpegPath)) {
     return resolvedFfmpegPath;
   }
-
   if (process.env.NODEJS_MOBILE_DATA_DIR || process.env.NATIVE_LIB_DIR) {
     const candidateNativeDirs = [];
-
     if (process.env.NATIVE_LIB_DIR) {
       candidateNativeDirs.push(process.env.NATIVE_LIB_DIR);
     }
-
     try {
       const maps = fs.readFileSync("/proc/self/maps", "utf-8");
       const soMatch = maps.match(/\s(\/data\/app\/[^\s]+\/lib\/[^\s/]+)\//);
@@ -102,7 +81,7 @@ async function getFfmpegPath() {
         candidateNativeDirs.push(soMatch[1]);
       }
       const soMatch2 = maps.match(
-        /\s(\/data\/app\/~~[^/]+\/app\.strawverse\.android-[^/]+\/lib\/[^\s/]+)\//,
+        /\s(\/data\/app\/~~[^/]+\/app\.strawverse\.android-[^/]+\/lib\/[^\s/]+)\//
       );
       if (soMatch2 && soMatch2[1]) {
         candidateNativeDirs.push(soMatch2[1]);
@@ -110,44 +89,30 @@ async function getFfmpegPath() {
     } catch (e) {
       logger.warn(`[FFmpeg] Could not read /proc/self/maps: ${e.message}`);
     }
-
     candidateNativeDirs.push("/data/data/app.strawverse.android/lib");
     candidateNativeDirs.push("/data/user/0/app.strawverse.android/lib");
-
     const userDataDir = process.env.NODEJS_MOBILE_DATA_DIR || process.cwd();
     candidateNativeDirs.push(path.join(userDataDir, "bin"));
-
-    const seen = new Set();
+    const seen = /* @__PURE__ */ new Set();
     for (const dir of candidateNativeDirs) {
       if (!dir || seen.has(dir)) continue;
       seen.add(dir);
       const ffmpegPath = path.join(dir, "libffmpeg.so");
       if (fs.existsSync(ffmpegPath)) {
         logger.info(
-          `FFmpeg binary found in native library directory: ${ffmpegPath}`,
+          `FFmpeg binary found in native library directory: ${ffmpegPath}`
         );
         resolvedFfmpegPath = ffmpegPath;
         return resolvedFfmpegPath;
       }
     }
-
     throw new Error(
-      "FFmpeg binary (libffmpeg.so) not found in APK. " +
-        "Rebuild the app with 'node capacitor/scripts/fetch-ffmpeg.mjs' " +
-        "to bundle FFmpeg, then reinstall.",
+      "FFmpeg binary (libffmpeg.so) not found in APK. Rebuild the app with 'node capacitor/scripts/fetch-ffmpeg.mjs' to bundle FFmpeg, then reinstall."
     );
   }
-
-  // Desktop (Electron / Node.js)
   const binaryName = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
-  const platformDir =
-    process.platform === "win32"
-      ? "win32"
-      : process.platform === "darwin"
-        ? "darwin"
-        : "linux";
+  const platformDir = process.platform === "win32" ? "win32" : process.platform === "darwin" ? "darwin" : "linux";
   const candidatePaths = [];
-
   const resourceRoots = [];
   if (process.resourcesPath) {
     resourceRoots.push(path.join(process.resourcesPath, "app.asar.unpacked"));
@@ -156,13 +121,14 @@ async function getFfmpegPath() {
     let electronApp = null;
     try {
       electronApp = require("electron").app;
-    } catch (e) {}
+    } catch (e) {
+    }
     if (electronApp && typeof electronApp.getAppPath === "function") {
       const dir = path.dirname(electronApp.getAppPath());
       if (dir) resourceRoots.push(path.join(dir, "app.asar.unpacked"));
     }
-  } catch (e) {}
-
+  } catch (e) {
+  }
   for (const root of resourceRoots) {
     candidatePaths.push(path.join(root, "ffmpeg", platformDir, binaryName));
   }
@@ -174,56 +140,49 @@ async function getFfmpegPath() {
       "electron",
       "ffmpeg",
       platformDir,
-      binaryName,
-    ),
+      binaryName
+    )
   );
   candidatePaths.push(
-    path.join(__dirname, "..", "..", "ffmpeg", platformDir, binaryName),
+    path.join(__dirname, "..", "..", "ffmpeg", platformDir, binaryName)
   );
-
   if (process.platform === "linux") {
     candidatePaths.push("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg");
   } else if (process.platform === "darwin") {
     candidatePaths.push("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg");
   }
-
   let ffmpegStatic = null;
   try {
     ffmpegStatic = require("ffmpeg-static");
-  } catch (e) {}
+  } catch (e) {
+  }
   if (typeof ffmpegStatic === "string" && ffmpegStatic) {
     candidatePaths.push(ffmpegStatic.replace("app.asar", "app.asar.unpacked"));
   }
   for (const root of resourceRoots) {
     candidatePaths.push(
-      path.join(root, "node_modules", "ffmpeg-static", binaryName),
+      path.join(root, "node_modules", "ffmpeg-static", binaryName)
     );
   }
   if (typeof ffmpegStatic === "string" && ffmpegStatic) {
     candidatePaths.push(ffmpegStatic);
   }
-
   for (const p of candidatePaths) {
     if (p && fs.existsSync(p)) {
       resolvedFfmpegPath = p;
       logger.info(
-        `[FFmpeg] Resolved FFmpeg binary path: ${resolvedFfmpegPath}`,
+        `[FFmpeg] Resolved FFmpeg binary path: ${resolvedFfmpegPath}`
       );
       return resolvedFfmpegPath;
     }
   }
-
   return binaryName;
 }
-
-// Tracks the last vault-clearance refresh so parallel segment workers
-// share one solver run instead of stampeding it.
 const clearanceRefresh = { at: 0, pending: null };
-
 async function refreshCdnClearance(targetUrl, referer = null) {
   try {
     if (typeof global.cloudflarebypass !== "function") return false;
-    if (Date.now() - clearanceRefresh.at < 10000 && !clearanceRefresh.pending) {
+    if (Date.now() - clearanceRefresh.at < 1e4 && !clearanceRefresh.pending) {
       return true;
     }
     if (!clearanceRefresh.pending) {
@@ -232,23 +191,20 @@ async function refreshCdnClearance(targetUrl, referer = null) {
         await global.cloudflarebypass(target, true);
         clearanceRefresh.at = Date.now();
         return true;
-      })()
-        .catch((err) => {
-          logger.warn(
-            `[Downloader] Clearance bypass failed for ${target}: ${err.message}`,
-          );
-          return false;
-        })
-        .finally(() => {
-          clearanceRefresh.pending = null;
-        });
+      })().catch((err) => {
+        logger.warn(
+          `[Downloader] Clearance bypass failed for ${target}: ${err.message}`
+        );
+        return false;
+      }).finally(() => {
+        clearanceRefresh.pending = null;
+      });
     }
     return await clearanceRefresh.pending;
   } catch (_) {
     return false;
   }
 }
-
 function parseSpeedFloorBps(speedStr) {
   if (!speedStr || speedStr === "0" || speedStr === "Disabled") return 0;
   const str = String(speedStr).toLowerCase().trim();
@@ -259,7 +215,6 @@ function parseSpeedFloorBps(speedStr) {
   if (str.includes("kb")) return Math.round(num * 1024);
   return Math.round(num);
 }
-
 class downloader {
   constructor({
     directory,
@@ -274,7 +229,7 @@ class downloader {
     quality = null,
     isM3U8 = true,
     fileBase = null,
-    minDownloadSpeed = null,
+    minDownloadSpeed = null
   }) {
     this.directory = directory;
     this.fileBase = fileBase;
@@ -289,26 +244,21 @@ class downloader {
       this.headers = headers ?? {};
       this.isM3U8 = isM3U8;
     }
-
     try {
       const ref = this.headers?.Referer || this.headers?.referer;
       if (ref && global.setDynamicReferer && this.streamUrl) {
         global.setDynamicReferer(new URL(this.streamUrl).hostname, ref);
       }
-    } catch (_) {}
-
+    } catch (_) {
+    }
     this.Epnum = parseInt(Epnum);
     this.caption = caption;
     this.EpID = EpID;
-    this.subtitles =
-      subtitles?.length > 0
-        ? (subtitles?.filter(({ lang }) => lang !== "Thumbnails") ?? [])
-        : [];
+    this.subtitles = subtitles?.length > 0 ? subtitles?.filter(({ lang }) => lang !== "Thumbnails") ?? [] : [];
     this.MergeSubtitles = MergeSubtitles ?? false;
     this.ChangeTosrt = ChangeTosrt ?? false;
     this.downloadedPaths = [];
   }
-
   async getMediaRequestHeaders(url) {
     const headers = getHeaders(url);
     const ref = this.headers?.Referer || this.headers?.referer;
@@ -316,13 +266,7 @@ class downloader {
     if (this.headers && typeof this.headers === "object") {
       for (const [k, v] of Object.entries(this.headers)) {
         const kl = k.toLowerCase();
-        if (
-          kl === "referer" ||
-          kl === "cookie" ||
-          kl.startsWith("sec-") ||
-          kl === "host" ||
-          kl === "origin"
-        ) {
+        if (kl === "referer" || kl === "cookie" || kl.startsWith("sec-") || kl === "host" || kl === "origin") {
           continue;
         }
         headers[k] = v;
@@ -330,11 +274,9 @@ class downloader {
     }
     return headers;
   }
-
   async getRequestHeaders(url) {
     return this.getMediaRequestHeaders(url);
   }
-
   // Server-set cookies (e.g. CDN session cookies issued with the
   // playlist) must travel with segment/key requests, otherwise hosts
   // that gate segments on them answer every segment with 403.
@@ -346,25 +288,17 @@ class downloader {
       return await requestThunk();
     } catch (err) {
       const status = err?.response?.statusCode ?? err?.response?.status;
-      const isCfOrNetErr =
-        status === 403 ||
-        status === 503 ||
-        status === 530 ||
-        (err?.message && String(err.message).includes("net::ERR_"));
-      if (
-        isCfOrNetErr &&
-        (await refreshCdnClearance(
-          targetUrl,
-          this.headers?.Referer || this.headers?.referer,
-        ))
-      ) {
+      const isCfOrNetErr = status === 403 || status === 503 || status === 530 || err?.message && String(err.message).includes("net::ERR_");
+      if (isCfOrNetErr && await refreshCdnClearance(
+        targetUrl,
+        this.headers?.Referer || this.headers?.referer
+      )) {
         return await requestThunk();
       }
       throw err;
     }
   }
-
-  async fetchMediaBytes(url, timeoutMs = 30000) {
+  async fetchMediaBytes(url, timeoutMs = 3e4) {
     const client = global.axios || require("axios");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -373,7 +307,7 @@ class downloader {
         headers: await this.getMediaRequestHeaders(url),
         responseType: "arraybuffer",
         signal: controller.signal,
-        timeout: timeoutMs,
+        timeout: timeoutMs
       });
       this.absorbResponseCookies(res?.headers);
       const data = res?.data;
@@ -385,20 +319,18 @@ class downloader {
       clearTimeout(timer);
     }
   }
-
-  async fetchMediaText(url, timeoutMs = 30000) {
+  async fetchMediaText(url, timeoutMs = 3e4) {
     const client = global.axios || require("axios");
     const headers = await this.getMediaRequestHeaders(url);
     const res = await client.get(url, {
       headers,
       responseType: "text",
-      timeout: timeoutMs,
+      timeout: timeoutMs
     });
     this.absorbResponseCookies(res?.headers);
     const data = res?.data;
     return typeof data === "string" ? data : String(data || "");
   }
-
   absorbResponseCookies(headers) {
     try {
       let setCookies = headers?.["set-cookie"];
@@ -408,7 +340,7 @@ class downloader {
       }
       if (setCookies.length === 0) return;
       if (!this.headers) this.headers = {};
-      const merged = new Map();
+      const merged = /* @__PURE__ */ new Map();
       const existing = this.headers?.Cookie || this.headers?.cookie || "";
       for (const part of String(existing).split(";")) {
         const trimmed = part.trim();
@@ -426,9 +358,9 @@ class downloader {
         delete this.headers.cookie;
         this.headers["Cookie"] = [...merged.values()].join("; ");
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
   parsePlaylistSegments(playlistContent, baseUrl) {
     if (!playlistContent) return [];
     let segments = [];
@@ -436,9 +368,8 @@ class downloader {
     let currentKeyUrl = null;
     let currentIv = null;
     let mediaSequence = 1;
-
-    const mediaSeqLine = lines.find((l) =>
-      l.trim().startsWith("#EXT-X-MEDIA-SEQUENCE:"),
+    const mediaSeqLine = lines.find(
+      (l) => l.trim().startsWith("#EXT-X-MEDIA-SEQUENCE:")
     );
     if (mediaSeqLine) {
       const seqMatch = mediaSeqLine.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
@@ -446,34 +377,26 @@ class downloader {
         mediaSequence = parseInt(seqMatch[1], 10);
       }
     }
-
     let segmentCount = 0;
-
     for (const line of lines) {
       if (!line) continue;
-
       if (line.startsWith("#")) {
         if (line.startsWith("#EXT-X-MAP:")) {
           const m = line.match(/URI=(?:"([^"]*)"|([^,]*))/i);
           if (m) {
             let mapUri = m[1] || m[2];
-            if (
-              mapUri &&
-              !mapUri.startsWith("http://") &&
-              !mapUri.startsWith("https://")
-            ) {
+            if (mapUri && !mapUri.startsWith("http://") && !mapUri.startsWith("https://")) {
               mapUri = resolveUrl(mapUri, baseUrl);
             }
             if (mapUri) {
               segments.push({
                 url: mapUri,
                 encrypted: false,
-                isInitSegment: true,
+                isInitSegment: true
               });
             }
           }
         }
-
         if (line.startsWith("#EXT-X-KEY:")) {
           const params = {};
           const attrString = line.substring("#EXT-X-KEY:".length);
@@ -481,19 +404,14 @@ class downloader {
           let match;
           while ((match = regex.exec(attrString)) !== null) {
             const key = match[1];
-            const value = match[2] !== undefined ? match[2] : match[3];
+            const value = match[2] !== void 0 ? match[2] : match[3];
             params[key] = value;
           }
-
           const method = (params.METHOD || "").toUpperCase();
           if (method === "AES-128") {
             let rawUri = params.URI;
             let absoluteKeyUri = rawUri;
-            if (
-              rawUri &&
-              !rawUri.startsWith("http://") &&
-              !rawUri.startsWith("https://")
-            ) {
+            if (rawUri && !rawUri.startsWith("http://") && !rawUri.startsWith("https://")) {
               absoluteKeyUri = resolveUrl(rawUri, baseUrl);
             }
             currentKeyUrl = absoluteKeyUri || null;
@@ -505,13 +423,10 @@ class downloader {
         }
         continue;
       }
-
-      // It's a segment or playlist URL
       let absoluteUrl = line;
       if (!line.startsWith("http://") && !line.startsWith("https://")) {
         absoluteUrl = resolveUrl(line, baseUrl);
       }
-
       if (currentKeyUrl) {
         const segIv = currentIv || String(mediaSequence + segmentCount);
         segmentCount++;
@@ -519,49 +434,37 @@ class downloader {
           url: absoluteUrl,
           keyUrl: currentKeyUrl,
           iv: segIv,
-          encrypted: true,
+          encrypted: true
         });
       } else {
         segments.push({ url: absoluteUrl, encrypted: false });
       }
     }
-
     return segments;
   }
-
   // Additional Checks
   async DownloadsChecking() {
-    if (
-      !this.directory ||
-      !(await this.CheckFileFolderExists(this.directory))
-    ) {
+    if (!this.directory || !await this.CheckFileFolderExists(this.directory)) {
       throw new Error("Directory Not Found!");
     }
-
     if (!this.Epnum) {
       throw new Error("No Episode Number Found!");
     }
-
     if (!this.EpID || this.EpID.length <= 0) {
       throw new Error("No Ep id found!");
     }
-
     const base = this.fileBase || `${this.Epnum}Ep`;
     this.mp4 = path.join(this.directory, `${base}.mp4`);
     this.SegmentsFile = path.join(this.directory, `${base}.ts`);
     this.AudioSegments = null;
     this.AudioSegmentsFile = null;
     this.audioStreamUrl = null;
-
     if (!this.streamUrl || this.streamUrl.length <= 0) {
       throw new Error("No Stream Url Provided");
     } else {
-      const isKnownDirectVideo =
-        this.isM3U8 === false ||
-        Boolean(
-          this.streamUrl.split("?")[0].match(/\.(mp4|mkv|webm|mov|avi)$/i),
-        );
-
+      const isKnownDirectVideo = this.isM3U8 === false || Boolean(
+        this.streamUrl.split("?")[0].match(/\.(mp4|mkv|webm|mov|avi)$/i)
+      );
       if (isKnownDirectVideo) {
         this.isDirectVideo = true;
         this.totalSegments = 1;
@@ -572,18 +475,18 @@ class downloader {
         this.logProgress("Starting direct video download...");
         return;
       }
-
       let Playlist;
       try {
-        Playlist = await this.fetchWithClearanceRetry(this.streamUrl, () =>
-          this.fetchMediaText(this.streamUrl, 30000),
+        Playlist = await this.fetchWithClearanceRetry(
+          this.streamUrl,
+          () => this.fetchMediaText(this.streamUrl, 3e4)
         );
       } catch (err) {
         try {
           const masterRes = await got(this.streamUrl, {
             headers: await this.getMediaRequestHeaders(this.streamUrl),
             http2: false,
-            timeout: { request: 30000 },
+            timeout: { request: 3e4 }
           });
           this.absorbResponseCookies(masterRes.headers);
           Playlist = masterRes.body;
@@ -591,24 +494,12 @@ class downloader {
           throw err;
         }
       }
-
       if (!Playlist) throw new Error("No Stream Found!");
-
-      // Detect direct video files (MP4, MKV, etc.) that are not HLS playlists
-      if (
-        !Playlist.includes("#EXTM3U") ||
-        (this.streamUrl.toLowerCase().includes(".mp4") &&
-          !Playlist.includes("#EXTINF"))
-      ) {
+      if (!Playlist.includes("#EXTM3U") || this.streamUrl.toLowerCase().includes(".mp4") && !Playlist.includes("#EXTINF")) {
         const trimmed = typeof Playlist === "string" ? Playlist.trim() : "";
-        if (
-          trimmed.startsWith("<") ||
-          trimmed.startsWith("{") ||
-          /<html/i.test(trimmed) ||
-          /<!DOCTYPE/i.test(trimmed)
-        ) {
+        if (trimmed.startsWith("<") || trimmed.startsWith("{") || /<html/i.test(trimmed) || /<!DOCTYPE/i.test(trimmed)) {
           throw new Error(
-            "SCRAPER_TEMPORARY_ERROR: Stream URL returned non-media HTML/JSON error page",
+            "SCRAPER_TEMPORARY_ERROR: Stream URL returned non-media HTML/JSON error page"
           );
         }
         this.isDirectVideo = true;
@@ -620,60 +511,42 @@ class downloader {
         this.logProgress("Starting direct video download...");
         return;
       }
-
-      // Resolve master playlist to media playlist if applicable
       if (Playlist.includes("#EXT-X-STREAM-INF")) {
-        // Audio track extraction from master playlist
         try {
-          const audioLines = Playlist.split("\n").filter((l) =>
-            l.includes("#EXT-X-MEDIA:TYPE=AUDIO"),
+          const audioLines = Playlist.split("\n").filter(
+            (l) => l.includes("#EXT-X-MEDIA:TYPE=AUDIO")
           );
           if (audioLines.length > 0) {
-            const currentSettings = (await settingfetch()) || {};
+            const currentSettings = await settingfetch() || {};
             const preferredDub = currentSettings?.PreferredDub || "English";
-            let chosenLine =
-              audioLines.find((l) => {
-                const name = (l.match(/NAME="([^"]+)"/i) || [])[1] || "";
-                const lang = (l.match(/LANGUAGE="([^"]+)"/i) || [])[1] || "";
-                return (
-                  /URI=/i.test(l) &&
-                  (name.toLowerCase().includes(preferredDub.toLowerCase()) ||
-                    lang.toLowerCase().includes(preferredDub.toLowerCase()))
-                );
-              }) ||
-              audioLines.find(
-                (l) => /DEFAULT=YES/i.test(l) && /URI=/i.test(l),
-              ) ||
-              audioLines.find((l) => /URI=/i.test(l));
-
+            let chosenLine = audioLines.find((l) => {
+              const name = (l.match(/NAME="([^"]+)"/i) || [])[1] || "";
+              const lang = (l.match(/LANGUAGE="([^"]+)"/i) || [])[1] || "";
+              return /URI=/i.test(l) && (name.toLowerCase().includes(preferredDub.toLowerCase()) || lang.toLowerCase().includes(preferredDub.toLowerCase()));
+            }) || audioLines.find(
+              (l) => /DEFAULT=YES/i.test(l) && /URI=/i.test(l)
+            ) || audioLines.find((l) => /URI=/i.test(l));
             if (chosenLine) {
-              const uMatch =
-                chosenLine.match(/URI="([^"]+)"/i) ||
-                chosenLine.match(/URI=([^,\s]+)/i);
+              const uMatch = chosenLine.match(/URI="([^"]+)"/i) || chosenLine.match(/URI=([^,\s]+)/i);
               if (uMatch) {
                 this.audioStreamUrl = resolveUrl(uMatch[1], this.streamUrl);
               }
             }
           }
-        } catch (_) {}
-
+        } catch (_) {
+        }
         if (!this.subtitles || this.subtitles.length === 0) {
           try {
-            const mediaLines = Playlist.split("\n").filter((l) =>
-              l.includes("#EXT-X-MEDIA:TYPE=SUBTITLES"),
+            const mediaLines = Playlist.split("\n").filter(
+              (l) => l.includes("#EXT-X-MEDIA:TYPE=SUBTITLES")
             );
-            const currentSettings = (await settingfetch()) || {};
-            const preferredLangs =
-              currentSettings?.preferredSubtitleLanguages || ["English"];
-
+            const currentSettings = await settingfetch() || {};
+            const preferredLangs = currentSettings?.preferredSubtitleLanguages || ["English"];
             for (const mLine of mediaLines) {
-              const uriMatch =
-                mLine.match(/URI="([^"]+)"/i) || mLine.match(/URI=([^,\s]+)/i);
+              const uriMatch = mLine.match(/URI="([^"]+)"/i) || mLine.match(/URI=([^,\s]+)/i);
               if (uriMatch) {
                 const subUri = resolveUrl(uriMatch[1], this.streamUrl);
-                const nameMatch =
-                  mLine.match(/NAME="([^"]+)"/i) ||
-                  mLine.match(/LANGUAGE="([^"]+)"/i);
+                const nameMatch = mLine.match(/NAME="([^"]+)"/i) || mLine.match(/LANGUAGE="([^"]+)"/i);
                 const subLang = nameMatch ? nameMatch[1] : "English";
                 if (isLanguagePreferred(subLang, preferredLangs)) {
                   if (!this.subtitles) this.subtitles = [];
@@ -681,12 +554,12 @@ class downloader {
                 }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+          }
         }
         const lines = Playlist.split("\n").map((line) => line.trim());
         const streams = [];
         let currentInfo = null;
-
         for (const line of lines) {
           if (line.startsWith("#EXT-X-STREAM-INF:")) {
             currentInfo = line;
@@ -695,26 +568,23 @@ class downloader {
               const absoluteUrl = resolveUrl(line, this.streamUrl);
               let resolution = "";
               let bandwidth = 0;
-
               if (currentInfo) {
                 const resMatch = currentInfo.match(/RESOLUTION=(\d+x\d+)/i);
                 if (resMatch) resolution = resMatch[1];
                 const bwMatch = currentInfo.match(/BANDWIDTH=(\d+)/i);
                 if (bwMatch) bandwidth = parseInt(bwMatch[1]);
               }
-
               streams.push({ url: absoluteUrl, resolution, bandwidth });
-            } catch (e) {}
+            } catch (e) {
+            }
             currentInfo = null;
           }
         }
-
         if (streams.length > 0) {
           streams.forEach((s) => {
             const parts = s.resolution.split("x");
             s.height = parts.length === 2 ? parseInt(parts[1]) : 0;
           });
-
           let selectedStream = null;
           if (this.quality) {
             const targetHeight = parseInt(this.quality);
@@ -722,31 +592,31 @@ class downloader {
               selectedStream = streams.find((s) => s.height === targetHeight);
             }
           }
-
           if (!selectedStream) {
             streams.sort(
-              (a, b) => b.height - a.height || b.bandwidth - a.bandwidth,
+              (a, b) => b.height - a.height || b.bandwidth - a.bandwidth
             );
             selectedStream = streams[0];
           }
-
           this.streamUrl = selectedStream.url;
           try {
             const ref = this.headers?.Referer || this.headers?.referer;
             if (ref && global.setDynamicReferer && this.streamUrl) {
               global.setDynamicReferer(new URL(this.streamUrl).hostname, ref);
             }
-          } catch (_) {}
+          } catch (_) {
+          }
           try {
-            Playlist = await this.fetchWithClearanceRetry(this.streamUrl, () =>
-              this.fetchMediaText(this.streamUrl, 30000),
+            Playlist = await this.fetchWithClearanceRetry(
+              this.streamUrl,
+              () => this.fetchMediaText(this.streamUrl, 3e4)
             );
           } catch (err) {
             try {
               const mediaRes = await got(this.streamUrl, {
                 headers: await this.getMediaRequestHeaders(this.streamUrl),
                 http2: false,
-                timeout: { request: 30000 },
+                timeout: { request: 3e4 }
               });
               this.absorbResponseCookies(mediaRes.headers);
               Playlist = mediaRes.body;
@@ -754,57 +624,48 @@ class downloader {
               throw err;
             }
           }
-
           if (!Playlist)
             throw new Error("No Stream Found for selected quality!");
         }
-
         if (this.audioStreamUrl) {
           try {
             const audioPlaylistText = await this.fetchWithClearanceRetry(
               this.audioStreamUrl,
-              () => this.fetchMediaText(this.audioStreamUrl, 30000),
+              () => this.fetchMediaText(this.audioStreamUrl, 3e4)
             );
             if (audioPlaylistText && audioPlaylistText.includes("#EXTINF")) {
               this.AudioSegments = this.parsePlaylistSegments(
                 audioPlaylistText,
-                this.audioStreamUrl,
+                this.audioStreamUrl
               );
               if (this.AudioSegments && this.AudioSegments.length > 0) {
-                const base = this.fileBase || `${this.Epnum}Ep`;
+                const base2 = this.fileBase || `${this.Epnum}Ep`;
                 this.AudioSegmentsFile = path.join(
                   this.directory,
-                  `${base}_audio.ts`,
+                  `${base2}_audio.ts`
                 );
                 logger.info(
-                  `[Download] Found separate audio stream with ${this.AudioSegments.length} segments: ${this.audioStreamUrl}`,
+                  `[Download] Found separate audio stream with ${this.AudioSegments.length} segments: ${this.audioStreamUrl}`
                 );
               }
             }
           } catch (aErr) {
             logger.warn(
-              `[Download] Failed to fetch separate audio playlist: ${aErr.message}`,
+              `[Download] Failed to fetch separate audio playlist: ${aErr.message}`
             );
           }
         }
       }
-
       this.Segments = this.parsePlaylistSegments(Playlist, this.streamUrl);
       if (this.Segments.length <= 0) throw new Error("No Segments Found!");
-
-      this.totalSegments =
-        this.Segments.length +
-        (this.AudioSegments ? this.AudioSegments.length : 0);
+      this.totalSegments = this.Segments.length + (this.AudioSegments ? this.AudioSegments.length : 0);
       this.currentSegments = 0;
-
       if (this.subtitles && this.subtitles.length > 0) {
         this.totalSegments += this.subtitles.length;
       }
-
       this.logProgress();
     }
   }
-
   async CheckFileFolderExists(FileDir) {
     if (!FileDir) return false;
     try {
@@ -814,33 +675,22 @@ class downloader {
       return false;
     }
   }
-
-  async fetchDirectVideoRange(
-    targetUrl,
-    rangeHeader = null,
-    timeoutMs = 60000,
-  ) {
+  async fetchDirectVideoRange(targetUrl, rangeHeader = null, timeoutMs = 6e4) {
     const u = new URL(targetUrl);
     const isHttps = u.protocol === "https:";
     const transport = isHttps ? https : http;
     const agent = isHttps ? keepAliveAgent.https : keepAliveAgent.http;
-
     const baseHeaders = await this.getMediaRequestHeaders(targetUrl);
     const headers = {
       Host: u.hostname,
       Accept: "*/*",
-      ...baseHeaders,
+      ...baseHeaders
     };
     if (rangeHeader) {
       headers.Range = rangeHeader;
     }
-    const ua =
-      this.headers?.["User-Agent"] ||
-      this.headers?.["user-agent"] ||
-      headers["User-Agent"] ||
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    const ua = this.headers?.["User-Agent"] || this.headers?.["user-agent"] || headers["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     headers["User-Agent"] = ua;
-
     return new Promise((resolve, reject) => {
       let isAborted = false;
       const req = transport.request(
@@ -851,56 +701,40 @@ class downloader {
           method: "GET",
           headers,
           agent,
-          timeout: timeoutMs,
+          timeout: timeoutMs
         },
         (res) => {
           this.absorbResponseCookies(res.headers);
           const statusCode = res.statusCode;
           const statusText = res.statusMessage;
-
-          // Follow redirect if 301/302/303/307/308
-          if (
-            (statusCode === 301 ||
-              statusCode === 302 ||
-              statusCode === 303 ||
-              statusCode === 307 ||
-              statusCode === 308) &&
-            res.headers.location
-          ) {
+          if ((statusCode === 301 || statusCode === 302 || statusCode === 303 || statusCode === 307 || statusCode === 308) && res.headers.location) {
             const redirectUrl = resolveUrl(res.headers.location, targetUrl);
             res.resume();
             return resolve(
-              this.fetchDirectVideoRange(redirectUrl, rangeHeader, timeoutMs),
+              this.fetchDirectVideoRange(redirectUrl, rangeHeader, timeoutMs)
             );
           }
-
           if (statusCode >= 400) {
             const err = new Error(
-              `Request failed with status code ${statusCode}`,
+              `Request failed with status code ${statusCode}`
             );
             err.statusCode = statusCode;
             err.response = {
               status: statusCode,
               statusText,
-              headers: res.headers,
+              headers: res.headers
             };
             res.resume();
             return reject(err);
           }
-
           const chunks = [];
           res.on("data", (chunk) => {
-            if (
-              (global.isQueuePaused && global.isQueuePaused()) ||
-              (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-            ) {
+            if (global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
               isAborted = true;
               req.destroy(
                 new Error(
-                  global.isQueuePaused && global.isQueuePaused()
-                    ? "Queue Paused"
-                    : "Episode Cancelled",
-                ),
+                  global.isQueuePaused && global.isQueuePaused() ? "Queue Paused" : "Episode Cancelled"
+                )
               );
               return;
             }
@@ -911,15 +745,14 @@ class downloader {
             resolve({
               status: statusCode,
               headers: res.headers,
-              data: Buffer.concat(chunks),
+              data: Buffer.concat(chunks)
             });
           });
           res.on("error", (err) => {
             reject(err);
           });
-        },
+        }
       );
-
       req.on("timeout", () => {
         req.destroy(new Error(`Timeout of ${timeoutMs}ms exceeded`));
       });
@@ -929,26 +762,19 @@ class downloader {
       req.end();
     });
   }
-
-  async fetchDirectVideoStream(targetUrl, timeoutMs = 120000) {
+  async fetchDirectVideoStream(targetUrl, timeoutMs = 12e4) {
     const u = new URL(targetUrl);
     const isHttps = u.protocol === "https:";
     const transport = isHttps ? https : http;
     const agent = isHttps ? keepAliveAgent.https : keepAliveAgent.http;
-
     const baseHeaders = await this.getMediaRequestHeaders(targetUrl);
     const headers = {
       Host: u.hostname,
       Accept: "*/*",
-      ...baseHeaders,
+      ...baseHeaders
     };
-    const ua =
-      this.headers?.["User-Agent"] ||
-      this.headers?.["user-agent"] ||
-      headers["User-Agent"] ||
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    const ua = this.headers?.["User-Agent"] || this.headers?.["user-agent"] || headers["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     headers["User-Agent"] = ua;
-
     return new Promise((resolve, reject) => {
       const req = transport.request(
         {
@@ -958,60 +784,44 @@ class downloader {
           method: "GET",
           headers,
           agent,
-          timeout: timeoutMs,
+          timeout: timeoutMs
         },
         (res) => {
           this.absorbResponseCookies(res.headers);
           const statusCode = res.statusCode;
-
-          if (
-            (statusCode === 301 ||
-              statusCode === 302 ||
-              statusCode === 303 ||
-              statusCode === 307 ||
-              statusCode === 308) &&
-            res.headers.location
-          ) {
+          if ((statusCode === 301 || statusCode === 302 || statusCode === 303 || statusCode === 307 || statusCode === 308) && res.headers.location) {
             const redirectUrl = resolveUrl(res.headers.location, targetUrl);
             res.resume();
             return resolve(this.fetchDirectVideoStream(redirectUrl, timeoutMs));
           }
-
           if (statusCode >= 400) {
             const err = new Error(
-              `Request failed with status code ${statusCode}`,
+              `Request failed with status code ${statusCode}`
             );
             err.statusCode = statusCode;
             err.response = {
               status: statusCode,
-              headers: res.headers,
+              headers: res.headers
             };
             res.resume();
             return reject(err);
           }
-
           const ct = (res.headers["content-type"] || "").toLowerCase();
-          if (
-            ct.includes("text/html") ||
-            ct.includes("application/json") ||
-            ct.includes("text/plain")
-          ) {
+          if (ct.includes("text/html") || ct.includes("application/json") || ct.includes("text/plain")) {
             res.resume();
             const err = new Error(
-              `SCRAPER_TEMPORARY_ERROR: Direct stream returned non-media content-type: ${ct}`,
+              `SCRAPER_TEMPORARY_ERROR: Direct stream returned non-media content-type: ${ct}`
             );
             err.statusCode = 415;
             return reject(err);
           }
-
           resolve({
             status: statusCode,
             headers: res.headers,
-            data: res,
+            data: res
           });
-        },
+        }
       );
-
       req.on("timeout", () => {
         req.destroy(new Error(`Timeout of ${timeoutMs}ms exceeded`));
       });
@@ -1019,43 +829,29 @@ class downloader {
       req.end();
     });
   }
-
   async downloadDirectVideoMultiPart(targetFile, tempVideoFile, tempDir) {
-    if (
-      (global.isQueuePaused && global.isQueuePaused()) ||
-      (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-    ) {
+    if (global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
       throw new Error(
-        global.isQueuePaused && global.isQueuePaused()
-          ? "Queue Paused"
-          : "Episode Cancelled",
+        global.isQueuePaused && global.isQueuePaused() ? "Queue Paused" : "Episode Cancelled"
       );
     }
-
-    // Step 1: Probe range support and file size
     this.logProgress("Checking video stream information...");
     let totalBytes = 0;
     let supportsRange = false;
-
     try {
-      const probeRes = await this.fetchWithClearanceRetry(this.streamUrl, () =>
-        this.fetchDirectVideoRange(this.streamUrl, "bytes=0-0", 20000),
+      const probeRes = await this.fetchWithClearanceRetry(
+        this.streamUrl,
+        () => this.fetchDirectVideoRange(this.streamUrl, "bytes=0-0", 2e4)
       );
       this.absorbResponseCookies(probeRes?.headers);
-
-      const contentRange =
-        probeRes.headers?.["content-range"] ||
-        probeRes.headers?.["Content-Range"];
+      const contentRange = probeRes.headers?.["content-range"] || probeRes.headers?.["Content-Range"];
       if (contentRange) {
         const match = String(contentRange).match(/\/(\d+)$/);
         if (match) {
           totalBytes = parseInt(match[1], 10);
           supportsRange = totalBytes > 0;
         }
-      } else if (
-        probeRes.headers?.["accept-ranges"] === "bytes" &&
-        probeRes.headers?.["content-length"]
-      ) {
+      } else if (probeRes.headers?.["accept-ranges"] === "bytes" && probeRes.headers?.["content-length"]) {
         const cl = parseInt(probeRes.headers["content-length"], 10);
         if (cl > 0) {
           totalBytes = cl;
@@ -1064,29 +860,24 @@ class downloader {
       }
     } catch (probeErr) {
       logger.warn(
-        `[Downloader] Range probe failed for direct video: ${probeErr.message}`,
+        `[Downloader] Range probe failed for direct video: ${probeErr.message}`
       );
     }
-
-    // Fallback: If range probe did not reveal totalBytes, try HEAD
     if (!supportsRange || !totalBytes) {
       try {
         const client = global.axios || require("axios");
         const headHeaders = await this.getMediaRequestHeaders(this.streamUrl);
-        const headRes = await this.fetchWithClearanceRetry(this.streamUrl, () =>
-          client.head(this.streamUrl, {
+        const headRes = await this.fetchWithClearanceRetry(
+          this.streamUrl,
+          () => client.head(this.streamUrl, {
             headers: headHeaders,
-            timeout: 15000,
-          }),
+            timeout: 15e3
+          })
         );
         this.absorbResponseCookies(headRes?.headers);
-
         const cl = parseInt(headRes.headers?.["content-length"], 10);
-        const cr =
-          headRes.headers?.["content-range"] ||
-          headRes.headers?.["Content-Range"];
+        const cr = headRes.headers?.["content-range"] || headRes.headers?.["Content-Range"];
         const ar = headRes.headers?.["accept-ranges"];
-
         if (cr) {
           const match = String(cr).match(/\/(\d+)$/);
           if (match) {
@@ -1099,36 +890,30 @@ class downloader {
             supportsRange = true;
           }
         }
-      } catch (_) {}
+      } catch (_) {
+      }
     }
-
-    const subCount =
-      this.subtitles && this.subtitles.length > 0 ? this.subtitles.length : 0;
-
-    // Case A: Multi-Part Range Download
+    const subCount = this.subtitles && this.subtitles.length > 0 ? this.subtitles.length : 0;
     if (supportsRange && totalBytes > 0) {
       if (totalBytes < 500 * 1024) {
         throw new Error(
-          `SCRAPER_TEMPORARY_ERROR: Direct video stream size too small (${totalBytes} bytes), expected media file`,
+          `SCRAPER_TEMPORARY_ERROR: Direct video stream size too small (${totalBytes} bytes), expected media file`
         );
       }
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-      const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per part
+      const CHUNK_SIZE = 5 * 1024 * 1024;
       const totalParts = Math.ceil(totalBytes / CHUNK_SIZE);
       this.totalSegments = totalParts + subCount;
-
       let alreadyDownloadedBytes = 0;
       let completedPartsCount = 0;
       const partsToDownload = [];
-
       for (let i = 0; i < totalParts; i++) {
         const start = i * CHUNK_SIZE;
         const end = Math.min(totalBytes - 1, (i + 1) * CHUNK_SIZE - 1);
         const expectedSize = end - start + 1;
         const partFile = path.join(tempDir, `${i}.part`);
-
         let isComplete = false;
         try {
           if (fs.existsSync(partFile)) {
@@ -1141,133 +926,108 @@ class downloader {
               fs.unlinkSync(partFile);
             }
           }
-        } catch (_) {}
-
+        } catch (_) {
+        }
         if (!isComplete) {
           partsToDownload.push({
             index: i,
             start,
             end,
             expectedSize,
-            partFile,
+            partFile
           });
         }
       }
-
       this.downloadedTotalBytes = alreadyDownloadedBytes;
       this.currentSegments = completedPartsCount;
-
       const domainName = extractDomain(
         this.streamUrl,
-        this.headers?.Referer || this.headers?.referer,
+        this.headers?.Referer || this.headers?.referer
       );
       let CONCURRENCY = await getInitialDomainConcurrency(domainName, 6);
       CONCURRENCY = Math.max(2, Math.min(CONCURRENCY, 8));
-
       logger.info(
-        `[Downloader] Starting multi-part direct video download: ${totalParts} parts (~${(totalBytes / 1024 / 1024).toFixed(1)} MB), ${completedPartsCount} cached, concurrency: ${CONCURRENCY}`,
+        `[Downloader] Starting multi-part direct video download: ${totalParts} parts (~${(totalBytes / 1024 / 1024).toFixed(1)} MB), ${completedPartsCount} cached, concurrency: ${CONCURRENCY}`
       );
       this.logProgress(null, CONCURRENCY);
-
       let nextPartIdx = 0;
       let stopDownloading = false;
-
       const downloadPart = async (part, retryCount = 0) => {
-        if (
-          stopDownloading ||
-          (global.isQueuePaused && global.isQueuePaused()) ||
-          (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-        ) {
+        if (stopDownloading || global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
           stopDownloading = true;
           throw new Error(
-            global.isQueuePaused && global.isQueuePaused()
-              ? "Queue Paused"
-              : "Episode Cancelled",
+            global.isQueuePaused && global.isQueuePaused() ? "Queue Paused" : "Episode Cancelled"
           );
         }
-
         const tempPartFile = `${part.partFile}.tmp`;
         try {
-          const res = await this.fetchWithClearanceRetry(this.streamUrl, () =>
-            this.fetchDirectVideoRange(
+          const res = await this.fetchWithClearanceRetry(
+            this.streamUrl,
+            () => this.fetchDirectVideoRange(
               this.streamUrl,
               `bytes=${part.start}-${part.end}`,
-              60000,
-            ),
+              6e4
+            )
           );
           this.absorbResponseCookies(res?.headers);
-
-          const buf = Buffer.isBuffer(res.data)
-            ? res.data
-            : Buffer.from(res.data);
+          const buf = Buffer.isBuffer(res.data) ? res.data : Buffer.from(res.data);
           if (!buf || buf.length === 0) {
             throw new Error(`Empty payload for part ${part.index}`);
           }
           if (buf.length !== part.expectedSize && part.end !== totalBytes - 1) {
             throw new Error(
-              `Size mismatch for part ${part.index}: expected ${part.expectedSize}, got ${buf.length}`,
+              `Size mismatch for part ${part.index}: expected ${part.expectedSize}, got ${buf.length}`
             );
           }
-
           await fs.promises.writeFile(tempPartFile, buf);
           await fs.promises.rename(tempPartFile, part.partFile);
-
-          this.downloadedTotalBytes =
-            (this.downloadedTotalBytes || 0) + buf.length;
+          this.downloadedTotalBytes = (this.downloadedTotalBytes || 0) + buf.length;
           this.currentSegments++;
           this.logProgress(null, CONCURRENCY);
         } catch (err) {
-          await fs.promises.unlink(tempPartFile).catch(() => {});
-          if (
-            stopDownloading ||
-            (global.isQueuePaused && global.isQueuePaused()) ||
-            (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-          ) {
+          await fs.promises.unlink(tempPartFile).catch(() => {
+          });
+          if (stopDownloading || global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
             stopDownloading = true;
             throw err;
           }
-
-          const RETRY_DELAYS = [1000, 3000, 5000];
+          const RETRY_DELAYS = [1e3, 3e3, 5e3];
           if (retryCount < RETRY_DELAYS.length) {
             logger.warn(
-              `[Downloader] Part ${part.index} failed (${err.message}). Retrying in ${RETRY_DELAYS[retryCount]}ms (attempt ${retryCount + 1}/${RETRY_DELAYS.length})...`,
+              `[Downloader] Part ${part.index} failed (${err.message}). Retrying in ${RETRY_DELAYS[retryCount]}ms (attempt ${retryCount + 1}/${RETRY_DELAYS.length})...`
             );
             await new Promise((r) => setTimeout(r, RETRY_DELAYS[retryCount]));
             return downloadPart(part, retryCount + 1);
           }
           throw new Error(
-            `SCRAPER_TEMPORARY_ERROR: Part ${part.index} failed after retries: ${err.message}`,
+            `SCRAPER_TEMPORARY_ERROR: Part ${part.index} failed after retries: ${err.message}`
           );
         }
       };
-
       const worker = async () => {
         while (nextPartIdx < partsToDownload.length && !stopDownloading) {
           const part = partsToDownload[nextPartIdx++];
           await downloadPart(part);
         }
       };
-
       const workers = [];
       const workerCount = Math.min(CONCURRENCY, partsToDownload.length || 1);
       for (let w = 0; w < workerCount; w++) {
         workers.push(worker());
       }
       await Promise.all(workers);
-
-      // Concatenating parts sequentially
       this.logProgress("Concatenating parts...");
       if (fs.existsSync(tempVideoFile)) {
-        await fs.promises.unlink(tempVideoFile).catch(() => {});
+        await fs.promises.unlink(tempVideoFile).catch(() => {
+        });
       }
-
       const writer = fs.createWriteStream(tempVideoFile, { flags: "w" });
       for (let i = 0; i < totalParts; i++) {
         const partFile = path.join(tempDir, `${i}.part`);
         if (!fs.existsSync(partFile)) {
           writer.destroy();
           throw new Error(
-            `Missing part file during concatenation: ${partFile}`,
+            `Missing part file during concatenation: ${partFile}`
           );
         }
         const readStream = fs.createReadStream(partFile);
@@ -1285,78 +1045,70 @@ class downloader {
         writer.on("finish", resolve);
         writer.on("error", reject);
       });
-
-      // Cleanup part files
       for (let i = 0; i < totalParts; i++) {
         const partFile = path.join(tempDir, `${i}.part`);
-        await fs.promises.unlink(partFile).catch(() => {});
+        await fs.promises.unlink(partFile).catch(() => {
+        });
       }
-      await fs.promises.rmdir(tempDir).catch(() => {});
-
+      await fs.promises.rmdir(tempDir).catch(() => {
+      });
       try {
         const stats = fs.statSync(tempVideoFile);
         if (stats.size < 500 * 1024) {
-          await fs.promises.unlink(tempVideoFile).catch(() => {});
+          await fs.promises.unlink(tempVideoFile).catch(() => {
+          });
           throw new Error(
-            `SCRAPER_TEMPORARY_ERROR: Concatenated video payload too small (${stats.size} bytes), likely an error or expired link`,
+            `SCRAPER_TEMPORARY_ERROR: Concatenated video payload too small (${stats.size} bytes), likely an error or expired link`
           );
         }
       } catch (statErr) {
-        await fs.promises.unlink(tempVideoFile).catch(() => {});
+        await fs.promises.unlink(tempVideoFile).catch(() => {
+        });
         throw statErr;
       }
-
       if (fs.existsSync(targetFile)) {
-        await fs.promises.unlink(targetFile).catch(() => {});
+        await fs.promises.unlink(targetFile).catch(() => {
+        });
       }
       await fs.promises.rename(tempVideoFile, targetFile);
       this.currentSegments = totalParts;
       this.logProgress("Video download complete!");
       return;
     }
-
-    // Case B: Single Stream Download Fallback (when byte ranges not supported)
     this.totalSegments = 1 + subCount;
     this.currentSegments = 0;
     this.logProgress("Downloading video stream...");
-
     await this.fetchWithClearanceRetry(this.streamUrl, async () => {
-      const res = await this.fetchDirectVideoStream(this.streamUrl, 120000);
+      const res = await this.fetchDirectVideoStream(this.streamUrl, 12e4);
       this.absorbResponseCookies(res?.headers);
-
       const totalLength = parseInt(res.headers?.["content-length"], 10) || 0;
       let downloaded = 0;
       const writer = fs.createWriteStream(tempVideoFile);
-
       await new Promise((resolve, reject) => {
         const checkCancelInterval = setInterval(() => {
-          if (
-            (global.isQueuePaused && global.isQueuePaused()) ||
-            (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-          ) {
+          if (global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
             clearInterval(checkCancelInterval);
             try {
               res.data.destroy();
-            } catch (_) {}
+            } catch (_) {
+            }
             try {
               writer.destroy();
-            } catch (_) {}
+            } catch (_) {
+            }
             reject(
               new Error(
-                global.isQueuePaused && global.isQueuePaused()
-                  ? "Queue Paused"
-                  : "Episode Cancelled",
-              ),
+                global.isQueuePaused && global.isQueuePaused() ? "Queue Paused" : "Episode Cancelled"
+              )
             );
           }
-        }, 1000);
-
+        }, 1e3);
         if (res.data && typeof res.data.on === "function") {
           res.data.on("data", (chunk) => {
             downloaded += chunk.length;
             this.downloadedTotalBytes = downloaded;
             if (totalLength > 0) {
-              const pct = Math.floor((downloaded / totalLength) * 100);
+              const pct = Math.floor(downloaded / totalLength * 100);
               this.logProgress(` (${pct}%)`);
             } else {
               const mb = (downloaded / (1024 * 1024)).toFixed(1);
@@ -1376,14 +1128,9 @@ class downloader {
             clearInterval(checkCancelInterval);
             reject(err);
           });
-        } else if (
-          Buffer.isBuffer(res.data) ||
-          res.data instanceof ArrayBuffer
-        ) {
+        } else if (Buffer.isBuffer(res.data) || res.data instanceof ArrayBuffer) {
           clearInterval(checkCancelInterval);
-          const buf = Buffer.isBuffer(res.data)
-            ? res.data
-            : Buffer.from(res.data);
+          const buf = Buffer.isBuffer(res.data) ? res.data : Buffer.from(res.data);
           fs.writeFileSync(tempVideoFile, buf);
           resolve();
         } else {
@@ -1392,92 +1139,71 @@ class downloader {
         }
       });
     });
-
     try {
       const stats = fs.statSync(tempVideoFile);
       if (stats.size < 500 * 1024) {
-        await fs.promises.unlink(tempVideoFile).catch(() => {});
+        await fs.promises.unlink(tempVideoFile).catch(() => {
+        });
         throw new Error(
-          `SCRAPER_TEMPORARY_ERROR: Downloaded video payload too small (${stats.size} bytes), likely an error or expired link`,
+          `SCRAPER_TEMPORARY_ERROR: Downloaded video payload too small (${stats.size} bytes), likely an error or expired link`
         );
       }
     } catch (statErr) {
-      await fs.promises.unlink(tempVideoFile).catch(() => {});
+      await fs.promises.unlink(tempVideoFile).catch(() => {
+      });
       throw statErr;
     }
-
     if (fs.existsSync(targetFile)) {
-      await fs.promises.unlink(targetFile).catch(() => {});
+      await fs.promises.unlink(targetFile).catch(() => {
+      });
     }
     await fs.promises.rename(tempVideoFile, targetFile);
     this.currentSegments = 1;
     this.logProgress("Video download complete!");
   }
-
   async downloadHlsTrack(segments, tempDir, outputFile, trackUrl) {
     if (!segments || segments.length === 0) return;
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-
-    const firstSegUrl =
-      typeof segments[0] === "object" ? segments[0]?.url : segments[0];
-
+    const firstSegUrl = typeof segments[0] === "object" ? segments[0]?.url : segments[0];
     try {
       const ref = this.headers?.Referer || this.headers?.referer;
       if (ref && global.setDynamicReferer && firstSegUrl) {
         global.setDynamicReferer(new URL(firstSegUrl).hostname, ref);
       }
-    } catch (_) {}
-
+    } catch (_) {
+    }
     const domainName = extractDomain(
       trackUrl || firstSegUrl,
-      this.headers?.Referer || this.headers?.referer,
+      this.headers?.Referer || this.headers?.referer
     );
-
     let CONCURRENCY = await getInitialDomainConcurrency(domainName, 8);
     const MAX_CONCURRENCY = 16;
     CONCURRENCY = Math.min(CONCURRENCY, MAX_CONCURRENCY);
     const targetSpeedFloorBps = parseSpeedFloorBps(
-      this.minDownloadSpeed !== null && this.minDownloadSpeed !== undefined
-        ? this.minDownloadSpeed
-        : "300 KB/s",
+      this.minDownloadSpeed !== null && this.minDownloadSpeed !== void 0 ? this.minDownloadSpeed : "300 KB/s"
     );
     const dlStartTime = Date.now();
     let freshCount = 0;
     let stopDownloading = false;
     let failedSegmentsCount = 0;
     if (!this._keyPromiseCache) this._keyPromiseCache = {};
-
     const speedSamples = [];
     let isBoosting = false;
     let boostStartTime = 0;
     let hasTokenExpiredErrors = false;
-
     const downloadSingleSegment = async (index, retryCount = 0) => {
-      if (
-        stopDownloading ||
-        (global.isQueuePaused && global.isQueuePaused()) ||
-        (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-      ) {
-        if (
-          global.isEpisodeInQueue &&
-          !global.isEpisodeInQueue(this.EpID) &&
-          !stopDownloading
-        ) {
+      if (stopDownloading || global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
+        if (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID) && !stopDownloading) {
           stopDownloading = true;
           throw new Error("Episode Cancelled");
-        } else if (
-          global.isQueuePaused &&
-          global.isQueuePaused() &&
-          !stopDownloading
-        ) {
+        } else if (global.isQueuePaused && global.isQueuePaused() && !stopDownloading) {
           stopDownloading = true;
           throw new Error("Queue Paused");
         }
         return false;
       }
-
       const segmentFile = path.join(tempDir, `${index}.ts`);
       try {
         if (fs.existsSync(segmentFile)) {
@@ -1486,25 +1212,22 @@ class downloader {
             return true;
           }
         }
-      } catch (e) {}
-
+      } catch (e) {
+      }
       try {
         if (isCircuitOpen(domainName)) {
           await waitForCircuit(domainName);
         }
-
         let Segment = segments[index];
         if (!Segment) throw new Error("[ STOPPING ] Segment Missing!");
-
         const segUrl = typeof Segment === "object" ? Segment.url : Segment;
         let body;
-
         if (typeof Segment === "object" && Segment.encrypted) {
           if (!this._keyPromiseCache[Segment.keyUrl]) {
             this._keyPromiseCache[Segment.keyUrl] = (async () => {
               const keyBytes = await this.fetchWithClearanceRetry(
                 Segment.keyUrl,
-                async () => this.fetchMediaBytes(Segment.keyUrl, 15000),
+                async () => this.fetchMediaBytes(Segment.keyUrl, 15e3)
               );
               return keyBytes;
             })().catch((err) => {
@@ -1521,90 +1244,71 @@ class downloader {
           }
           const cipherBytes = await this.fetchWithClearanceRetry(
             segUrl,
-            async () => this.fetchMediaBytes(segUrl, 60000),
+            async () => this.fetchMediaBytes(segUrl, 6e4)
           );
           const cipherText = stripPngHeader(cipherBytes);
           const decipher = crypto.createDecipheriv(
             "aes-128-cbc",
             keyBuffer,
-            iv,
+            iv
           );
           body = Buffer.concat([decipher.update(cipherText), decipher.final()]);
         } else {
           const segBytes = await this.fetchWithClearanceRetry(
             segUrl,
-            async () => this.fetchMediaBytes(segUrl, 60000),
+            async () => this.fetchMediaBytes(segUrl, 6e4)
           );
           body = stripPngHeader(segBytes);
         }
-
         if (!body || body.length === 0) {
           throw new Error("Received empty segment payload");
         }
-
         const segDir = path.dirname(segmentFile);
         if (!fs.existsSync(segDir)) {
           fs.mkdirSync(segDir, { recursive: true });
         }
-
         await fs.promises.writeFile(segmentFile, body);
         return body.length;
       } catch (err) {
-        if (stopDownloading || (global.isQueuePaused && global.isQueuePaused()))
+        if (stopDownloading || global.isQueuePaused && global.isQueuePaused())
           throw err;
-
-        const status =
-          err?.response?.statusCode ??
-          err?.response?.status ??
-          err?.statusCode;
+        const status = err?.response?.statusCode ?? err?.response?.status ?? err?.statusCode;
         if (status === 404 || status === 403 || status === 410) {
           hasTokenExpiredErrors = true;
         }
-        const isServerRateOrError =
-          status === 429 || status === 502 || status === 503 || status === 530;
-        const RETRY_DELAYS = isServerRateOrError
-          ? [2000, 5000, 8000]
-          : [1000, 3000, 5000];
-
+        const isServerRateOrError = status === 429 || status === 502 || status === 503 || status === 530;
+        const RETRY_DELAYS = isServerRateOrError ? [2e3, 5e3, 8e3] : [1e3, 3e3, 5e3];
         if (retryCount >= RETRY_DELAYS.length) {
           logger.error(
-            `[Download] Segment ${index} failed after 3 retries: ${err.message}`,
+            `[Download] Segment ${index} failed after 3 retries: ${err.message}`
           );
           throw new Error(
-            `SCRAPER_TEMPORARY_ERROR: Segment ${index} failed after retries (${err.message})`,
+            `SCRAPER_TEMPORARY_ERROR: Segment ${index} failed after retries (${err.message})`
           );
         }
-
         const delay = RETRY_DELAYS[retryCount];
         this.logProgress(
-          `Download error on segment ${index}! Retrying in ${delay / 1000}s (attempt ${retryCount + 2}/4)...`,
+          `Download error on segment ${index}! Retrying in ${delay / 1e3}s (attempt ${retryCount + 2}/4)...`
         );
-
         if (isCircuitOpen(domainName)) {
           await waitForCircuit(domainName);
         } else {
           await new Promise((res) => setTimeout(res, delay));
         }
-
         return await downloadSingleSegment(index, retryCount + 1);
       }
     };
-
     let activeWorkers = 0;
     let nextIndex = 0;
     let completedCount = 0;
     let sampleBytesDownloaded = 0;
     let sampleStartTime = Date.now();
     let failedIndices = [];
-
     await new Promise((resolve, reject) => {
       const checkDone = () => {
         if (completedCount >= segments.length || stopDownloading) {
           if (stopDownloading) {
-            if (
-              global.isEpisodeInQueue &&
-              !global.isEpisodeInQueue(this.EpID)
-            ) {
+            if (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
               reject(new Error("Episode Cancelled"));
             } else {
               reject(new Error("Queue Paused"));
@@ -1614,173 +1318,132 @@ class downloader {
           }
         }
       };
-
       const enqueueNext = () => {
-        if (
-          stopDownloading ||
-          (global.isQueuePaused && global.isQueuePaused()) ||
-          (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-        ) {
+        if (stopDownloading || global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
           stopDownloading = true;
           checkDone();
           return;
         }
-
-        while (
-          activeWorkers < CONCURRENCY &&
-          nextIndex < segments.length &&
-          !stopDownloading
-        ) {
+        while (activeWorkers < CONCURRENCY && nextIndex < segments.length && !stopDownloading) {
           const idx = nextIndex++;
           activeWorkers++;
-
-          downloadSingleSegment(idx)
-            .then(async (downloadedBytes) => {
-              activeWorkers--;
-              completedCount++;
-              if (downloadedBytes) {
-                sampleBytesDownloaded +=
-                  typeof downloadedBytes === "number" ? downloadedBytes : 0;
-                if (typeof downloadedBytes === "number") {
-                  this.downloadedTotalBytes =
-                    (this.downloadedTotalBytes || 0) + downloadedBytes;
-                  freshCount++;
-                  speedSamples.push({
-                    time: Date.now(),
-                    bytes: downloadedBytes,
-                  });
-                }
-                this.currentSegments = Math.min(
-                  this.totalSegments,
-                  this.currentSegments + 1,
-                );
-                this.logProgress(null, CONCURRENCY);
+          downloadSingleSegment(idx).then(async (downloadedBytes) => {
+            activeWorkers--;
+            completedCount++;
+            if (downloadedBytes) {
+              sampleBytesDownloaded += typeof downloadedBytes === "number" ? downloadedBytes : 0;
+              if (typeof downloadedBytes === "number") {
+                this.downloadedTotalBytes = (this.downloadedTotalBytes || 0) + downloadedBytes;
+                freshCount++;
+                speedSamples.push({
+                  time: Date.now(),
+                  bytes: downloadedBytes
+                });
               }
-
-              if (targetSpeedFloorBps > 0) {
-                const now = Date.now();
-                const cutoff = now - 15000;
-                while (
-                  speedSamples.length > 0 &&
-                  speedSamples[0].time < cutoff
-                ) {
-                  speedSamples.shift();
-                }
-
-                let rollingBytes = 0;
-                for (const s of speedSamples) rollingBytes += s.bytes;
-                const rollingDurationSec =
-                  speedSamples.length > 1
-                    ? (now - speedSamples[0].time) / 1000
-                    : 0;
-                const rollingBps =
-                  rollingDurationSec >= 3
-                    ? rollingBytes / rollingDurationSec
-                    : 0;
-
-                const isWarmup =
-                  now - dlStartTime < 8000 || freshCount < 6;
-
-                if (!isWarmup && rollingDurationSec >= 5 && rollingBps > 0) {
-                  if (rollingBps < targetSpeedFloorBps) {
-                    if (!isBoosting) {
-                      isBoosting = true;
-                      boostStartTime = now;
-                      CONCURRENCY = MAX_CONCURRENCY;
-                      logger.info(
-                        `[Downloader] Download speed ${Math.round(rollingBps / 1024)} KB/s below floor (${Math.round(targetSpeedFloorBps / 1024)} KB/s). Boosting concurrency to ${MAX_CONCURRENCY} threads.`,
-                      );
-                      enqueueNext();
-                    } else if (now - boostStartTime >= 12000) {
-                      const remaining =
-                        segments.length - completedCount;
-                      if (remaining > 8) {
-                        let slowHost = domainName;
-                        try {
-                          slowHost = new URL(trackUrl).hostname;
-                        } catch (_) {}
-                        stopDownloading = true;
-                        const slowErr = new Error(
-                          `SLOW_MIRROR_FAILOVER: host ${slowHost} speed ${Math.round(rollingBps / 1024)} KB/s below floor (${Math.round(targetSpeedFloorBps / 1024)} KB/s)`,
-                        );
-                        slowErr.isSlowMirror = true;
-                        slowErr.failedHost = slowHost;
-                        slowErr.bps = rollingBps;
-                        reject(slowErr);
-                        return;
-                      }
-                    }
-                  } else if (isBoosting) {
-                    isBoosting = false;
-                    logger.info(
-                      `[Downloader] Speed recovered to ${Math.round(rollingBps / 1024)} KB/s after concurrency boost.`,
-                    );
-                  }
-                }
-              }
-
-              if (completedCount % 4 === 0) {
-                const durationSec = (Date.now() - sampleStartTime) / 1000;
-                const throughput =
-                  durationSec > 0 ? sampleBytesDownloaded / durationSec : 0;
-                recordDomainBatchSuccess(domainName, throughput);
-                sampleBytesDownloaded = 0;
-                sampleStartTime = Date.now();
-                CONCURRENCY = Math.min(
-                  await getDomainConcurrency(domainName, 16),
-                  MAX_CONCURRENCY,
-                );
-              }
-
-              if (completedCount >= segments.length) {
-                resolve();
-              } else {
-                enqueueNext();
-              }
-            })
-            .catch((err) => {
-              activeWorkers--;
-              const cancelled =
-                (global.isEpisodeInQueue &&
-                  !global.isEpisodeInQueue(this.EpID)) ||
-                (global.isQueuePaused && global.isQueuePaused());
-              if (cancelled || stopDownloading) {
-                stopDownloading = true;
-                setDomainErrorCap(domainName, CONCURRENCY);
-                reject(err);
-                return;
-              }
-              completedCount++;
-              failedIndices.push(idx);
-              setDomainErrorCap(domainName, CONCURRENCY);
-              this.logProgress(
-                `Segment ${idx} failed, will retry after the rest finish...`,
-                CONCURRENCY,
+              this.currentSegments = Math.min(
+                this.totalSegments,
+                this.currentSegments + 1
               );
+              this.logProgress(null, CONCURRENCY);
+            }
+            if (targetSpeedFloorBps > 0) {
+              const now = Date.now();
+              const cutoff = now - 15e3;
+              while (speedSamples.length > 0 && speedSamples[0].time < cutoff) {
+                speedSamples.shift();
+              }
+              let rollingBytes = 0;
+              for (const s of speedSamples) rollingBytes += s.bytes;
+              const rollingDurationSec = speedSamples.length > 1 ? (now - speedSamples[0].time) / 1e3 : 0;
+              const rollingBps = rollingDurationSec >= 3 ? rollingBytes / rollingDurationSec : 0;
+              const isWarmup = now - dlStartTime < 8e3 || freshCount < 6;
+              if (!isWarmup && rollingDurationSec >= 5 && rollingBps > 0) {
+                if (rollingBps < targetSpeedFloorBps) {
+                  if (!isBoosting) {
+                    isBoosting = true;
+                    boostStartTime = now;
+                    CONCURRENCY = MAX_CONCURRENCY;
+                    logger.info(
+                      `[Downloader] Download speed ${Math.round(rollingBps / 1024)} KB/s below floor (${Math.round(targetSpeedFloorBps / 1024)} KB/s). Boosting concurrency to ${MAX_CONCURRENCY} threads.`
+                    );
+                    enqueueNext();
+                  } else if (now - boostStartTime >= 12e3) {
+                    const remaining = segments.length - completedCount;
+                    if (remaining > 8) {
+                      let slowHost = domainName;
+                      try {
+                        slowHost = new URL(trackUrl).hostname;
+                      } catch (_) {
+                      }
+                      stopDownloading = true;
+                      const slowErr = new Error(
+                        `SLOW_MIRROR_FAILOVER: host ${slowHost} speed ${Math.round(rollingBps / 1024)} KB/s below floor (${Math.round(targetSpeedFloorBps / 1024)} KB/s)`
+                      );
+                      slowErr.isSlowMirror = true;
+                      slowErr.failedHost = slowHost;
+                      slowErr.bps = rollingBps;
+                      reject(slowErr);
+                      return;
+                    }
+                  }
+                } else if (isBoosting) {
+                  isBoosting = false;
+                  logger.info(
+                    `[Downloader] Speed recovered to ${Math.round(rollingBps / 1024)} KB/s after concurrency boost.`
+                  );
+                }
+              }
+            }
+            if (completedCount % 4 === 0) {
+              const durationSec = (Date.now() - sampleStartTime) / 1e3;
+              const throughput = durationSec > 0 ? sampleBytesDownloaded / durationSec : 0;
+              recordDomainBatchSuccess(domainName, throughput);
+              sampleBytesDownloaded = 0;
+              sampleStartTime = Date.now();
+              CONCURRENCY = Math.min(
+                await getDomainConcurrency(domainName, 16),
+                MAX_CONCURRENCY
+              );
+            }
+            if (completedCount >= segments.length) {
+              resolve();
+            } else {
               enqueueNext();
-            });
+            }
+          }).catch((err) => {
+            activeWorkers--;
+            const cancelled = global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID) || global.isQueuePaused && global.isQueuePaused();
+            if (cancelled || stopDownloading) {
+              stopDownloading = true;
+              setDomainErrorCap(domainName, CONCURRENCY);
+              reject(err);
+              return;
+            }
+            completedCount++;
+            failedIndices.push(idx);
+            setDomainErrorCap(domainName, CONCURRENCY);
+            this.logProgress(
+              `Segment ${idx} failed, will retry after the rest finish...`,
+              CONCURRENCY
+            );
+            enqueueNext();
+          });
         }
-
         checkDone();
       };
-
       enqueueNext();
     });
-
     if (failedIndices.length > 0) {
       const massFailThreshold = Math.max(8, Math.ceil(segments.length * 0.1));
       if (failedIndices.length > massFailThreshold) {
         let host = "unknown-host";
         try {
           host = new URL(trackUrl).hostname;
-        } catch (_) {}
-        const isExpired =
-          hasTokenExpiredErrors &&
-          (completedCount > 0 || segments.length > 20);
+        } catch (_) {
+        }
+        const isExpired = hasTokenExpiredErrors && (completedCount > 0 || segments.length > 20);
         const abortErr = new Error(
-          isExpired
-            ? `SCRAPER_TEMPORARY_ERROR: stream session or token expired for ${host} (${failedIndices.length}/${segments.length} segments failed)`
-            : `SCRAPER_TEMPORARY_ERROR: segment host ${host} unreachable (${failedIndices.length}/${segments.length} segments failed)`,
+          isExpired ? `SCRAPER_TEMPORARY_ERROR: stream session or token expired for ${host} (${failedIndices.length}/${segments.length} segments failed)` : `SCRAPER_TEMPORARY_ERROR: segment host ${host} unreachable (${failedIndices.length}/${segments.length} segments failed)`
         );
         if (!isExpired) {
           abortErr.failedHost = host;
@@ -1788,34 +1451,29 @@ class downloader {
         throw abortErr;
       }
       this.logProgress(
-        `Retrying ${failedIndices.length} failed segment(s) one by one...`,
+        `Retrying ${failedIndices.length} failed segment(s) one by one...`
       );
       const secondPass = failedIndices.slice(0, 12);
       const stillFailing = [...failedIndices.slice(12)];
       for (const fIdx of secondPass) {
-        if (
-          stopDownloading ||
-          (global.isQueuePaused && global.isQueuePaused()) ||
-          (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID))
-        ) {
+        if (stopDownloading || global.isQueuePaused && global.isQueuePaused() || global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
           stillFailing.push(fIdx);
           continue;
         }
         try {
           const bytes = await downloadSingleSegment(fIdx, 0);
           if (typeof bytes === "number") {
-            this.downloadedTotalBytes =
-              (this.downloadedTotalBytes || 0) + bytes;
+            this.downloadedTotalBytes = (this.downloadedTotalBytes || 0) + bytes;
           }
           this.currentSegments = Math.min(
             this.totalSegments,
-            this.currentSegments + 1,
+            this.currentSegments + 1
           );
           this.logProgress(null, CONCURRENCY);
         } catch (err) {
           stillFailing.push(fIdx);
           logger.error(
-            `[Download] Segment ${fIdx} failed on second pass: ${err.message}`,
+            `[Download] Segment ${fIdx} failed on second pass: ${err.message}`
           );
         }
       }
@@ -1824,14 +1482,11 @@ class downloader {
         let host = "unknown-host";
         try {
           host = new URL(trackUrl).hostname;
-        } catch (_) {}
-        const isExpired =
-          hasTokenExpiredErrors &&
-          (completedCount > 0 || segments.length > 20);
+        } catch (_) {
+        }
+        const isExpired = hasTokenExpiredErrors && (completedCount > 0 || segments.length > 20);
         const finalErr = new Error(
-          isExpired
-            ? `SCRAPER_TEMPORARY_ERROR: stream session or token expired for ${host} (${failedIndices.length} segment(s) failed after retries)`
-            : `SCRAPER_TEMPORARY_ERROR: ${failedIndices.length} segment(s) failed after retries (e.g. #${failedIndices[0]})`,
+          isExpired ? `SCRAPER_TEMPORARY_ERROR: stream session or token expired for ${host} (${failedIndices.length} segment(s) failed after retries)` : `SCRAPER_TEMPORARY_ERROR: ${failedIndices.length} segment(s) failed after retries (e.g. #${failedIndices[0]})`
         );
         if (!isExpired) {
           finalErr.failedHost = host;
@@ -1839,18 +1494,14 @@ class downloader {
         throw finalErr;
       }
     }
-
     logger.info(
-      `[Download] Finished downloading track segments. Total: ${segments.length}, Failed/Empty: ${failedSegmentsCount}`,
+      `[Download] Finished downloading track segments. Total: ${segments.length}, Failed/Empty: ${failedSegmentsCount}`
     );
-
-    // Concatenate segments
     this.logProgress("Concatenating segments...");
     const writer = fs.createWriteStream(outputFile, {
       flags: "w",
-      encoding: null,
+      encoding: null
     });
-
     for (let j = 0; j < segments.length; j++) {
       const segmentFile = path.join(tempDir, `${j}.ts`);
       const data = await fs.promises.readFile(segmentFile);
@@ -1859,20 +1510,18 @@ class downloader {
         await new Promise((resolve) => writer.once("drain", resolve));
       }
     }
-
     await new Promise((resolve, reject) => {
       writer.on("error", reject);
       writer.end(resolve);
     });
-
-    // Clean up temp segment files
     for (let j = 0; j < segments.length; j++) {
       const segmentFile = path.join(tempDir, `${j}.ts`);
-      await fs.promises.unlink(segmentFile).catch(() => {});
+      await fs.promises.unlink(segmentFile).catch(() => {
+      });
     }
-    await fs.promises.rmdir(tempDir).catch(() => {});
+    await fs.promises.rmdir(tempDir).catch(() => {
+    });
   }
-
   async DownloadStart() {
     try {
       if (this.isDirectVideo) {
@@ -1880,66 +1529,52 @@ class downloader {
         const tempVideoFile = `${this.mp4}.downloading`;
         const tempDir = path.join(
           this.directory,
-          `.temp_${path.basename(this.SegmentsFile)}`,
+          `.temp_${path.basename(this.SegmentsFile)}`
         );
-
         if (fs.existsSync(tempVideoFile)) {
-          await fs.promises.unlink(tempVideoFile).catch(() => {});
+          await fs.promises.unlink(tempVideoFile).catch(() => {
+          });
         }
-
         await this.downloadDirectVideoMultiPart(
           targetFile,
           tempVideoFile,
-          tempDir,
+          tempDir
         );
         return;
       }
-
-      // 1. Download Video Track
       const tempVideoDir = path.join(
         this.directory,
-        `.temp_${path.basename(this.SegmentsFile)}`,
+        `.temp_${path.basename(this.SegmentsFile)}`
       );
       await this.downloadHlsTrack(
         this.Segments,
         tempVideoDir,
         this.SegmentsFile,
-        this.streamUrl,
+        this.streamUrl
       );
-
-// 2. Download Audio Track if present
-      if (
-        this.AudioSegments &&
-        this.AudioSegments.length > 0 &&
-        this.AudioSegmentsFile
-      ) {
+      if (this.AudioSegments && this.AudioSegments.length > 0 && this.AudioSegmentsFile) {
         this.logProgress("Downloading audio track...");
         const tempAudioDir = path.join(
           this.directory,
-          `.temp_${path.basename(this.AudioSegmentsFile)}`,
+          `.temp_${path.basename(this.AudioSegmentsFile)}`
         );
         await this.downloadHlsTrack(
           this.AudioSegments,
           tempAudioDir,
           this.AudioSegmentsFile,
-          this.audioStreamUrl || this.streamUrl,
+          this.audioStreamUrl || this.streamUrl
         );
       }
     } catch (err) {
-      if (
-        err.message === "Queue Paused" ||
-        err.message === "Episode Cancelled"
-      ) {
+      if (err.message === "Queue Paused" || err.message === "Episode Cancelled") {
         throw err;
       }
       throw err;
     }
   }
-
   // Check Subtitles & download
   async CheckSubtitles() {
     if (this.subtitles.length === 0) return;
-
     try {
       let subDir;
       if (this.MergeSubtitles) {
@@ -1950,82 +1585,67 @@ class downloader {
       } else {
         subDir = this.directory;
       }
-
       const downloadPromises = this.subtitles.map(async ({ url, lang }) => {
         try {
           if (!url) return;
           let targetUrl = url;
           if (targetUrl.startsWith("//")) {
             targetUrl = "https:" + targetUrl;
-          } else if (
-            !targetUrl.startsWith("http://") &&
-            !targetUrl.startsWith("https://")
-          ) {
+          } else if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
             targetUrl = resolveUrl(targetUrl, this.streamUrl);
           }
-
-          const normalizedLang =
-            iso6391.getCode(lang) ||
-            (() => {
-              const cleaned = (lang ?? "")
-                .trim()
-                .replace(/[^a-z]/gi, "")
-                .toLowerCase();
-              return cleaned ? cleaned?.slice(0, 3) : "und";
-            })();
-
+          const normalizedLang = iso6391.getCode(lang) || (() => {
+            const cleaned = (lang ?? "").trim().replace(/[^a-z]/gi, "").toLowerCase();
+            return cleaned ? cleaned?.slice(0, 3) : "und";
+          })();
           let ext = "srt";
           try {
             const urlPath = new URL(targetUrl).pathname;
-            const parsedExt = path
-              .extname(path.basename(urlPath))
-              .replace(".", "");
+            const parsedExt = path.extname(path.basename(urlPath)).replace(".", "");
             if (parsedExt) ext = parsedExt;
-          } catch (e) {}
-
+          } catch (e) {
+          }
           let finalExt = ext;
           if (finalExt === "vtt" && this.ChangeTosrt) {
             finalExt = "srt";
           }
-
           let subtitlePath;
           if (this.MergeSubtitles) {
             subtitlePath = path.join(
               subDir,
-              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`
             );
           } else if (this.mp4) {
             const baseVideoName = path.parse(this.mp4).name;
             subtitlePath = path.join(
               this.directory,
-              `${baseVideoName}.${normalizedLang}.${finalExt}`,
+              `${baseVideoName}.${normalizedLang}.${finalExt}`
             );
           } else if (this.fileBase) {
             subtitlePath = path.join(
               this.directory,
-              `${this.fileBase}.${normalizedLang}.${finalExt}`,
+              `${this.fileBase}.${normalizedLang}.${finalExt}`
             );
           } else {
             subtitlePath = path.join(
               this.directory,
-              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+              `${this.Epnum}Ep.${normalizedLang}.${finalExt}`
             );
           }
-
           if (fs.existsSync(subtitlePath)) {
             this.downloadedPaths.push({
               path: subtitlePath,
               lang: normalizedLang,
-              title: lang,
+              title: lang
             });
             return;
           }
-
           const subHeaders = await this.getMediaRequestHeaders(targetUrl);
           let subtitleData;
           try {
-            subtitleData = await this.fetchWithClearanceRetry(targetUrl, () =>
-              this.fetchMediaText(targetUrl, 15000),
+            subtitleData = await this.fetchWithClearanceRetry(
+              targetUrl,
+              () => this.fetchMediaText(targetUrl, 15e3)
             );
           } catch (e) {
             try {
@@ -2037,19 +1657,16 @@ class downloader {
               subtitleData = await got(targetUrl, {
                 headers: cleanHeaders,
                 http2: false,
-                timeout: { request: 15000 },
+                timeout: { request: 15e3 }
               }).text();
             } catch (err) {
               subtitleData = await got(targetUrl, {
                 http2: false,
-                timeout: { request: 15000 },
+                timeout: { request: 15e3 }
               }).text();
             }
           }
-
-          const isVtt =
-            finalExt === "vtt" || subtitleData.trim().startsWith("WEBVTT");
-
+          const isVtt = finalExt === "vtt" || subtitleData.trim().startsWith("WEBVTT");
           if (isVtt) {
             if (this.ChangeTosrt) {
               subtitleData = this.convertToSRT(subtitleData);
@@ -2058,18 +1675,18 @@ class downloader {
                 if (this.MergeSubtitles) {
                   subtitlePath = path.join(
                     subDir,
-                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`
                   );
                 } else if (this.mp4) {
                   const baseVideoName = path.parse(this.mp4).name;
                   subtitlePath = path.join(
                     this.directory,
-                    `${baseVideoName}.${normalizedLang}.${finalExt}`,
+                    `${baseVideoName}.${normalizedLang}.${finalExt}`
                   );
                 } else if (this.fileBase) {
                   subtitlePath = path.join(
                     this.directory,
-                    `${this.fileBase}.${normalizedLang}.${finalExt}`,
+                    `${this.fileBase}.${normalizedLang}.${finalExt}`
                   );
                 }
               }
@@ -2079,29 +1696,28 @@ class downloader {
                 if (this.MergeSubtitles) {
                   subtitlePath = path.join(
                     subDir,
-                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`,
+                    `${this.Epnum}Ep.${normalizedLang}.${finalExt}`
                   );
                 } else if (this.mp4) {
                   const baseVideoName = path.parse(this.mp4).name;
                   subtitlePath = path.join(
                     this.directory,
-                    `${baseVideoName}.${normalizedLang}.${finalExt}`,
+                    `${baseVideoName}.${normalizedLang}.${finalExt}`
                   );
                 } else if (this.fileBase) {
                   subtitlePath = path.join(
                     this.directory,
-                    `${this.fileBase}.${normalizedLang}.${finalExt}`,
+                    `${this.fileBase}.${normalizedLang}.${finalExt}`
                   );
                 }
               }
             }
           }
-
           await fs.promises.writeFile(subtitlePath, subtitleData, "utf8");
           this.downloadedPaths.push({
             path: subtitlePath,
             lang: normalizedLang,
-            title: lang,
+            title: lang
           });
         } catch (err) {
           logger.error(`Failed to download subtitle : ${url} (${lang})`);
@@ -2109,7 +1725,6 @@ class downloader {
           logger.error(`Stack trace: ${err.stack}`);
         }
       });
-
       await Promise.all(downloadPromises);
       this.currentSegments += this.subtitles.length;
     } catch (err) {
@@ -2118,22 +1733,16 @@ class downloader {
       logger.error(`Stack trace: ${err.stack}`);
     }
   }
-
   convertToSRT(content) {
     try {
       const lines = content.split(/\r?\n/);
       const srtLines = [];
       let index = 1;
       let buffer = [];
-
-      const timeRegex =
-        /^(\d{2}:)?\d{2}:\d{2}[\.,]\d{3} --> (\d{2}:)?\d{2}:\d{2}[\.,]\d{3}$/;
-
+      const timeRegex = /^(\d{2}:)?\d{2}:\d{2}[\.,]\d{3} --> (\d{2}:)?\d{2}:\d{2}[\.,]\d{3}$/;
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim().replace(/<[^>]+>/g, "");
-
         if (line.startsWith("WEBVTT")) continue;
-
         if (!line) {
           if (buffer.length) {
             srtLines.push(String(index++));
@@ -2143,7 +1752,6 @@ class downloader {
           }
           continue;
         }
-
         if (timeRegex.test(line)) {
           if (buffer.length) {
             srtLines.push(String(index++));
@@ -2151,13 +1759,10 @@ class downloader {
             srtLines.push("");
             buffer = [];
           }
-
           let [start, end] = line.split(" --> ");
           const startMs = this.toMs(start);
           const endMs = this.toMs(end);
-
           if (endMs <= startMs) continue;
-
           buffer.push(`${this.toSRT(startMs)} --> ${this.toSRT(endMs)}`);
         } else {
           if (/^\d+$/.test(line) && buffer.length === 0) {
@@ -2168,20 +1773,17 @@ class downloader {
           }
         }
       }
-
       if (buffer.length) {
         srtLines.push(String(index++));
         srtLines.push(...buffer);
         srtLines.push("");
       }
-
       return srtLines.join("\n");
     } catch (err) {
       console.warn("Subtitle conversion failed:", err.message);
       return content;
     }
   }
-
   toMs(timeStr) {
     const clean = timeStr.replace(",", ".");
     const parts = clean.split(":");
@@ -2189,22 +1791,19 @@ class downloader {
     const s = parseInt(sec);
     const m = parseInt(parts[parts.length - 2]);
     const h = parts.length === 3 ? parseInt(parts[0]) : 0;
-
-    return h * 3600000 + m * 60000 + s * 1000 + parseInt(ms);
+    return h * 36e5 + m * 6e4 + s * 1e3 + parseInt(ms);
   }
-
   toSRT(ms) {
-    const h = String(Math.floor(ms / 3600000)).padStart(2, "0");
-    const m = String(Math.floor((ms % 3600000) / 60000)).padStart(2, "0");
-    const s = String(Math.floor((ms % 60000) / 1000)).padStart(2, "0");
-    const msStr = String(ms % 1000).padStart(3, "0");
+    const h = String(Math.floor(ms / 36e5)).padStart(2, "0");
+    const m = String(Math.floor(ms % 36e5 / 6e4)).padStart(2, "0");
+    const s = String(Math.floor(ms % 6e4 / 1e3)).padStart(2, "0");
+    const msStr = String(ms % 1e3).padStart(3, "0");
     return `${h}:${m}:${s},${msStr}`;
   }
-
   async MergeSegments() {
     if (this.isDirectVideo) {
       if (this.MergeSubtitles && this.downloadedPaths.length > 0) {
-        const releaseLock = await acquireMergeLock();
+        const releaseLock2 = await acquireMergeLock();
         try {
           const currentFfmpegPath = await getFfmpegPath();
           const tempOutput = `${this.mp4}.remux.mp4`;
@@ -2225,20 +1824,14 @@ class downloader {
             }
           }
           ffmpegArgs.push(tempOutput);
-
           const nativeDir = path.dirname(currentFfmpegPath);
           const spawnEnv = {
             ...process.env,
-            LD_LIBRARY_PATH:
-              nativeDir +
-              (process.env.LD_LIBRARY_PATH
-                ? ":" + process.env.LD_LIBRARY_PATH
-                : ""),
+            LD_LIBRARY_PATH: nativeDir + (process.env.LD_LIBRARY_PATH ? ":" + process.env.LD_LIBRARY_PATH : "")
           };
-
           await new Promise((resolve, reject) => {
             const child = spawn(currentFfmpegPath, ffmpegArgs, {
-              env: spawnEnv,
+              env: spawnEnv
             });
             child.on("close", (code) => {
               if (code !== 0)
@@ -2247,26 +1840,24 @@ class downloader {
             });
             child.on("error", reject);
           });
-
-          await fs.promises.unlink(this.mp4).catch(() => {});
+          await fs.promises.unlink(this.mp4).catch(() => {
+          });
           await fs.promises.rename(tempOutput, this.mp4);
         } catch (e) {
           logger.warn(
-            `[Video Remux] Failed to merge subtitles into direct MP4: ${e.message}`,
+            `[Video Remux] Failed to merge subtitles into direct MP4: ${e.message}`
           );
         } finally {
-          releaseLock();
+          releaseLock2();
         }
       }
       await this.CleanEverything();
       return;
     }
-
     const releaseLock = await acquireMergeLock();
     try {
       let ffmpegSucceeded = false;
       let ffmpegError = null;
-
       try {
         const currentFfmpegPath = await getFfmpegPath();
         const ffmpegArgs = [
@@ -2276,9 +1867,8 @@ class downloader {
           "-probesize",
           "50000000",
           "-i",
-          this.SegmentsFile,
+          this.SegmentsFile
         ];
-
         let hasSeparateAudio = false;
         if (this.AudioSegmentsFile && fs.existsSync(this.AudioSegmentsFile)) {
           hasSeparateAudio = true;
@@ -2288,12 +1878,10 @@ class downloader {
             "-probesize",
             "50000000",
             "-i",
-            this.AudioSegmentsFile,
+            this.AudioSegmentsFile
           );
         }
-
         const subStartIndex = hasSeparateAudio ? 2 : 1;
-
         if (this.MergeSubtitles && this.downloadedPaths.length > 0) {
           for (const sub of this.downloadedPaths) {
             ffmpegArgs.push("-i", sub.path);
@@ -2321,36 +1909,27 @@ class downloader {
             ffmpegArgs.push("-c", "copy");
           }
         }
-
-        const tempOutput = `${this.mp4}.remux.mp4`;
-        ffmpegArgs.push(tempOutput);
-
+        const tempOutput2 = `${this.mp4}.remux.mp4`;
+        ffmpegArgs.push(tempOutput2);
         try {
           const stats = fs.statSync(this.SegmentsFile);
           logger.info(
-            `[Video Remux] Concatenated TS file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`,
+            `[Video Remux] Concatenated TS file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`
           );
         } catch (e) {
           logger.error(
-            `[Video Remux] Failed to check TS file size: ${e.message}`,
+            `[Video Remux] Failed to check TS file size: ${e.message}`
           );
         }
-
         const nativeDir = path.dirname(currentFfmpegPath);
         const spawnEnv = {
           ...process.env,
-          LD_LIBRARY_PATH:
-            nativeDir +
-            (process.env.LD_LIBRARY_PATH
-              ? ":" + process.env.LD_LIBRARY_PATH
-              : ""),
+          LD_LIBRARY_PATH: nativeDir + (process.env.LD_LIBRARY_PATH ? ":" + process.env.LD_LIBRARY_PATH : "")
         };
-
         const runFfmpeg = (args) => {
           return new Promise((resolve, reject) => {
             const child = spawn(currentFfmpegPath, args, { env: spawnEnv });
             let ffmpegOutput = "";
-
             if (child.stdout) {
               child.stdout.on("data", (data) => {
                 ffmpegOutput += data.toString();
@@ -2361,36 +1940,34 @@ class downloader {
                 ffmpegOutput += data.toString();
               });
             }
-
             child.on("close", (code, signal) => {
               if (code !== 0) {
-                logger.error(`[Video Remux] FFmpeg output:\n${ffmpegOutput}`);
+                logger.error(`[Video Remux] FFmpeg output:
+${ffmpegOutput}`);
                 return reject(
                   new Error(
-                    `FFmpeg exited with code ${code}${signal ? ` (signal: ${signal})` : ""}`,
-                  ),
+                    `FFmpeg exited with code ${code}${signal ? ` (signal: ${signal})` : ""}`
+                  )
                 );
               }
               resolve();
             });
-
             child.on("error", (err) => {
               reject(new Error(`Failed to start FFmpeg: ${err.message}`));
             });
           });
         };
-
         try {
           await runFfmpeg(ffmpegArgs);
           ffmpegSucceeded = true;
         } catch (initialErr) {
           ffmpegError = initialErr;
-          // If subtitles merge failed, try fallback without subtitles (video/audio copy only)
           if (this.MergeSubtitles && this.downloadedPaths.length > 0) {
             logger.warn(
-              `[Video Remux] Remux with subtitles failed (${initialErr.message}). Retrying remux with video/audio only...`,
+              `[Video Remux] Remux with subtitles failed (${initialErr.message}). Retrying remux with video/audio only...`
             );
-            await fs.promises.unlink(tempOutput).catch(() => {});
+            await fs.promises.unlink(tempOutput2).catch(() => {
+            });
             const fallbackArgs = [
               "-y",
               "-f",
@@ -2399,14 +1976,14 @@ class downloader {
               this.SegmentsFile,
               "-c",
               "copy",
-              tempOutput,
+              tempOutput2
             ];
             try {
               await runFfmpeg(fallbackArgs);
               ffmpegSucceeded = true;
             } catch (fallbackErr) {
               logger.warn(
-                `[Video Remux] Fallback remux also failed: ${fallbackErr.message}`,
+                `[Video Remux] Fallback remux also failed: ${fallbackErr.message}`
               );
               ffmpegError = fallbackErr;
             }
@@ -2415,63 +1992,60 @@ class downloader {
       } catch (err) {
         ffmpegError = err;
       }
-
       const tempOutput = `${this.mp4}.remux.mp4`;
       if (ffmpegSucceeded && fs.existsSync(tempOutput)) {
         try {
-          await fs.promises.unlink(this.mp4).catch(() => {});
+          await fs.promises.unlink(this.mp4).catch(() => {
+          });
           await fs.promises.rename(tempOutput, this.mp4);
           const stats = fs.statSync(this.mp4);
           let tsStats = null;
           try {
             tsStats = fs.statSync(this.SegmentsFile);
-          } catch (_) {}
-
-          if (
-            stats.size < 1024 * 1024 &&
-            tsStats &&
-            tsStats.size > 2 * 1024 * 1024
-          ) {
+          } catch (_) {
+          }
+          if (stats.size < 1024 * 1024 && tsStats && tsStats.size > 2 * 1024 * 1024) {
             throw new Error(
-              `Output MP4 is suspiciously small (${stats.size} bytes vs ${tsStats.size} bytes TS), likely missing video stream`,
+              `Output MP4 is suspiciously small (${stats.size} bytes vs ${tsStats.size} bytes TS), likely missing video stream`
             );
           }
-
           logger.info(
-            `[Video Remux] Output MP4 file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`,
+            `[Video Remux] Output MP4 file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`
           );
         } catch (e) {
           ffmpegSucceeded = false;
           ffmpegError = e;
           logger.error(`[Video Remux] Validation failed for MP4: ${e.message}`);
-          await fs.promises.unlink(this.mp4).catch(() => {});
+          await fs.promises.unlink(this.mp4).catch(() => {
+          });
         }
       } else {
-        // Ensure no corrupt/truncated partial file is left behind
         try {
           if (fs.existsSync(tempOutput)) {
-            await fs.promises.unlink(tempOutput).catch(() => {});
+            await fs.promises.unlink(tempOutput).catch(() => {
+            });
           }
           if (fs.existsSync(this.mp4)) {
-            await fs.promises.unlink(this.mp4).catch(() => {});
+            await fs.promises.unlink(this.mp4).catch(() => {
+            });
           }
-        } catch (_) {}
+        } catch (_) {
+        }
         logger.warn(
-          `[Video Remux] FFmpeg failed: ${ffmpegError?.message}. Keeping .ts file as output.`,
+          `[Video Remux] FFmpeg failed: ${ffmpegError?.message}. Keeping .ts file as output.`
         );
         this._keepSegmentsFile = true;
         try {
           const stats = fs.statSync(this.SegmentsFile);
           logger.info(
-            `[Video Remux] Output TS file: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`,
+            `[Video Remux] Output TS file: ${(stats.size / 1024 / 1024).toFixed(2)} MB (${stats.size} bytes)`
           );
         } catch (e) {
           logger.error(
-            `[Video Remux] Failed to check TS file size: ${e.message}`,
+            `[Video Remux] Failed to check TS file size: ${e.message}`
           );
         }
       }
-
       this.currentSegments = this.totalSegments;
       await this.logProgress();
       await this.CleanEverything();
@@ -2482,15 +2056,12 @@ class downloader {
       releaseLock();
     }
   }
-
   getLangCodeFromFilename(filePath) {
     let FileName = path?.basename(filePath)?.split("_")?.[1];
     if (!FileName) return "und";
-    FileName =
-      FileName?.split(".srt")?.[0]?.slice(0, 3)?.toLocaleLowerCase() ?? "und";
+    FileName = FileName?.split(".srt")?.[0]?.slice(0, 3)?.toLocaleLowerCase() ?? "und";
     return FileName;
   }
-
   async logProgress(ExtraMessage, currentConcurrency = null) {
     if (global.isEpisodeInQueue && !global.isEpisodeInQueue(this.EpID)) {
       if (this._pendingLogTimer) {
@@ -2503,54 +2074,38 @@ class downloader {
     if (this.currentSegments >= this.totalSegments) {
       caption = caption.replace("Downloading", "Merging");
     }
-
     if (ExtraMessage) caption += ExtraMessage;
-
     const now = Date.now();
     const isFinalUpdate = this.currentSegments >= this.totalSegments;
     const captionChanged = this._lastCaption !== caption;
     const timeSinceLast = now - (this._lastLogTime || 0);
-
-    if (
-      !isFinalUpdate &&
-      !captionChanged &&
-      !ExtraMessage &&
-      timeSinceLast < 1000
-    ) {
+    if (!isFinalUpdate && !captionChanged && !ExtraMessage && timeSinceLast < 1e3) {
       if (!this._pendingLogTimer) {
         this._pendingLogTimer = setTimeout(() => {
           this._pendingLogTimer = null;
           this.logProgress(null, currentConcurrency);
-        }, 1000 - timeSinceLast);
+        }, 1e3 - timeSinceLast);
       }
       return;
     }
-
     if (this._pendingLogTimer) {
       clearTimeout(this._pendingLogTimer);
       this._pendingLogTimer = null;
     }
-
     this._lastLogTime = now;
     this._lastCaption = caption;
-
     let speedStr = null;
     let etaStr = null;
     const totalDownloaded = this.downloadedTotalBytes || 0;
-
     if (!this._speedStartTime) {
       this._speedStartTime = now;
       this._speedBytesStart = totalDownloaded;
     }
-    const elapsedSec = (now - this._speedStartTime) / 1000;
-
+    const elapsedSec = (now - this._speedStartTime) / 1e3;
     if (elapsedSec >= 0.8 && totalDownloaded > (this._speedBytesStart || 0)) {
       const bytesSince = totalDownloaded - (this._speedBytesStart || 0);
       const instantSpeed = bytesSince / elapsedSec;
-      this._smoothedSpeed = this._smoothedSpeed
-        ? 0.4 * instantSpeed + 0.6 * this._smoothedSpeed
-        : instantSpeed;
-
+      this._smoothedSpeed = this._smoothedSpeed ? 0.4 * instantSpeed + 0.6 * this._smoothedSpeed : instantSpeed;
       const currentSpeed = this._smoothedSpeed;
       if (currentSpeed >= 1024 * 1024) {
         speedStr = `${(currentSpeed / (1024 * 1024)).toFixed(1)} MB/s`;
@@ -2559,20 +2114,14 @@ class downloader {
       } else if (currentSpeed > 0) {
         speedStr = `${Math.round(currentSpeed)} B/s`;
       }
-
-      if (
-        this.totalSegments > 0 &&
-        this.currentSegments > 0 &&
-        currentSpeed > 0
-      ) {
+      if (this.totalSegments > 0 && this.currentSegments > 0 && currentSpeed > 0) {
         const remainingSegments = Math.max(
           0,
-          this.totalSegments - this.currentSegments,
+          this.totalSegments - this.currentSegments
         );
         const avgBytesPerSeg = totalDownloaded / this.currentSegments;
         const remainingBytes = remainingSegments * avgBytesPerSeg;
         const remainingSec = Math.round(remainingBytes / currentSpeed);
-
         if (remainingSec >= 0 && isFinite(remainingSec)) {
           if (remainingSec < 60) {
             etaStr = `~${remainingSec}s left`;
@@ -2583,52 +2132,50 @@ class downloader {
           }
         }
       }
-
       if (speedStr) this._lastSpeedStr = speedStr;
       if (etaStr) this._lastEtaStr = etaStr;
-
       if (elapsedSec >= 2.5) {
         this._speedStartTime = now;
         this._speedBytesStart = totalDownloaded;
       }
     }
-
-    const port = global.PORT || 3000;
+    const port = global.PORT || 3e3;
     await fetch(`http://127.0.0.1:${port}/api/logger`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        caption: caption,
+        caption,
         totalSegments: this.totalSegments,
         currentSegments: this.currentSegments,
         epid: this.EpID,
         concurrency: currentConcurrency,
         lastTestedConcurrency: this.lastTestedConcurrency || null,
         downloadSpeed: speedStr || this._lastSpeedStr || null,
-        eta: etaStr || this._lastEtaStr || null,
-      }),
+        eta: etaStr || this._lastEtaStr || null
+      })
     }).catch((err) => {
       logger.error("Error updating download progress");
       logger.error(`Error message: ${err.message}`);
       logger.error(`Stack trace: ${err.stack}`);
     });
   }
-
   async CleanEverything(everything = false) {
     if (!this._keepSegmentsFile) {
-      await fs.promises.unlink(this.SegmentsFile).catch(() => {});
+      await fs.promises.unlink(this.SegmentsFile).catch(() => {
+      });
       if (this.AudioSegmentsFile) {
-        await fs.promises.unlink(this.AudioSegmentsFile).catch(() => {});
+        await fs.promises.unlink(this.AudioSegmentsFile).catch(() => {
+        });
       }
     }
-
     if (this.MergeSubtitles) {
       if (Array.isArray(this.downloadedPaths)) {
         for (const sub of this.downloadedPaths) {
           if (sub?.path && fs.existsSync(sub.path)) {
-            await fs.promises.unlink(sub.path).catch(() => {});
+            await fs.promises.unlink(sub.path).catch(() => {
+            });
           }
         }
       }
@@ -2636,7 +2183,8 @@ class downloader {
       if (fs.existsSync(tempSubsDir)) {
         try {
           await fs.promises.rm(tempSubsDir, { recursive: true, force: true });
-        } catch (_) {}
+        } catch (_) {
+        }
       }
       const subsDir = path.join(this.directory, "subs");
       if (fs.existsSync(subsDir)) {
@@ -2657,15 +2205,16 @@ class downloader {
         }
       }
     }
-
     if (everything) {
-      await fs.promises.unlink(this.mp4).catch(() => {});
-      await fs.promises.unlink(`${this.mp4}.downloading`).catch(() => {});
-      await fs.promises.unlink(`${this.mp4}.remux.mp4`).catch(() => {});
-
+      await fs.promises.unlink(this.mp4).catch(() => {
+      });
+      await fs.promises.unlink(`${this.mp4}.downloading`).catch(() => {
+      });
+      await fs.promises.unlink(`${this.mp4}.remux.mp4`).catch(() => {
+      });
       const tempDir = path.join(
         this.directory,
-        `.temp_${path.basename(this.SegmentsFile)}`,
+        `.temp_${path.basename(this.SegmentsFile)}`
       );
       if (fs.existsSync(tempDir)) {
         try {
@@ -2678,11 +2227,10 @@ class downloader {
           logger.error(`Failed to clean up temp dir: ${e.message}`);
         }
       }
-
       if (this.AudioSegmentsFile) {
         const audioTempDir = path.join(
           this.directory,
-          `.temp_${path.basename(this.AudioSegmentsFile)}`,
+          `.temp_${path.basename(this.AudioSegmentsFile)}`
         );
         if (fs.existsSync(audioTempDir)) {
           try {
@@ -2699,7 +2247,6 @@ class downloader {
     }
   }
 }
-
 async function download(args) {
   let obj = new downloader(args);
   try {
@@ -2711,9 +2258,7 @@ async function download(args) {
     if (err.message === "Queue Paused") {
       throw err;
     }
-    const isSlow =
-      err?.isSlowMirror ||
-      (err?.message && err.message.includes("SLOW_MIRROR_FAILOVER"));
+    const isSlow = err?.isSlowMirror || err?.message && err.message.includes("SLOW_MIRROR_FAILOVER");
     await obj.CleanEverything(!isSlow);
     if (err.message === "Episode Cancelled") {
       throw err;
@@ -2722,5 +2267,4 @@ async function download(args) {
     throw err;
   }
 }
-
 module.exports = { download, getFfmpegPath, stripPngHeader, downloader };

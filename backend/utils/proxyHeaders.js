@@ -2,27 +2,22 @@ const { run, queryAll } = require("./db");
 const {
   getExtensionHeaderRules,
   getCookieDomains,
-  getCanonicalDomain,
+  getCanonicalDomain
 } = require("./extensionRegistry");
-
 const cookieCache = global.proxyCookieCache || (global.proxyCookieCache = {});
-const refererCache =
-  global.proxyRefererCache || (global.proxyRefererCache = {});
+const refererCache = global.proxyRefererCache || (global.proxyRefererCache = {});
 const uaCache = global.proxyUaCache || (global.proxyUaCache = {});
 const hintsCache = global.proxyHintsCache || (global.proxyHintsCache = {});
-
 function normalizeDomain(domain) {
   if (!domain) return null;
   try {
     if (domain.startsWith("http://") || domain.startsWith("https://")) {
       return new URL(domain).hostname.replace(/^www\./, "");
     }
-  } catch (e) {}
-  return String(domain)
-    .replace(/^www\./, "")
-    .toLowerCase();
+  } catch (e) {
+  }
+  return String(domain).replace(/^www\./, "").toLowerCase();
 }
-
 function normalizeReferer(referer) {
   if (!referer) return null;
   try {
@@ -35,7 +30,6 @@ function normalizeReferer(referer) {
     return null;
   }
 }
-
 function deleteHeaderCaseInsensitive(headers, name) {
   if (!headers || typeof headers !== "object") return;
   const target = String(name || "").toLowerCase();
@@ -45,31 +39,28 @@ function deleteHeaderCaseInsensitive(headers, name) {
     }
   }
 }
-
 function saveStreamReferer(domain, referer) {
   const normalizedDomain = normalizeDomain(domain);
   const normalizedReferer = normalizeReferer(referer);
   if (!normalizedDomain || !normalizedReferer) return;
-
   const domainsToSave = [normalizedDomain];
   const parts = normalizedDomain.split(".");
   if (parts.length > 2) {
     const rootDomain = parts.slice(-2).join(".");
     domainsToSave.push(rootDomain);
   }
-
   for (const d of domainsToSave) {
     if (refererCache[d] !== normalizedReferer) {
       refererCache[d] = normalizedReferer;
       try {
         run(
           "INSERT INTO StreamReferer (domain, referer, updatedAt) VALUES (?, ?, ?) ON CONFLICT(domain) DO UPDATE SET referer = excluded.referer, updatedAt = excluded.updatedAt",
-          [d, normalizedReferer, Date.now()],
+          [d, normalizedReferer, Date.now()]
         );
-      } catch (e) {}
+      } catch (e) {
+      }
     }
   }
-
   try {
     run(
       `DELETE FROM StreamReferer
@@ -78,77 +69,65 @@ function saveStreamReferer(domain, referer) {
            ORDER BY CASE WHEN domain = ? THEN 1 ELSE 0 END DESC, updatedAt DESC
            LIMIT ?
          )`,
-      ["__fallback__", 1000],
+      ["__fallback__", 1e3]
     );
-  } catch (e) {}
+  } catch (e) {
+  }
 }
-
 function getStoredStreamReferer(domain) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) return null;
-
   const parts = normalizedDomain.split(".");
   const candidates = [];
   for (let i = 0; i < parts.length - 1; i++) {
     candidates.push(parts.slice(i).join("."));
   }
-
   for (const candidate of candidates) {
     if (refererCache[candidate]) return refererCache[candidate];
   }
   return null;
 }
-
 global.setDynamicReferer = (domain, referer) => {
   saveStreamReferer(domain, referer);
 };
-
 global.setFallbackReferer = (referer) => {
   delete refererCache["__fallback__"];
   saveStreamReferer("__fallback__", referer);
 };
-
 async function initCache() {
   try {
-    // Load referers
     const referers = await queryAll(
-      "SELECT domain, referer FROM StreamReferer",
+      "SELECT domain, referer FROM StreamReferer"
     );
     for (const ref of referers) {
       if (ref.domain && ref.referer) {
         refererCache[ref.domain] = ref.referer;
       }
     }
-
-    // Load cookies, UAs, hints
     const now = Date.now();
     const rows = await queryAll(
-      "SELECT id, name, domain, value, expirationDate, local_saved_at FROM cookie",
+      "SELECT id, name, domain, value, expirationDate, local_saved_at FROM cookie"
     );
     for (const row of rows) {
       const id = row.id;
       const name = row.name;
       const value = row.value;
-      const domain =
-        row.domain ||
-        (id.endsWith("-user_agent")
-          ? id.substring(0, id.length - 11)
-          : id.substring(0, id.length - 13));
-
+      const domain = row.domain || (id.endsWith("-user_agent") ? id.substring(0, id.length - 11) : id.substring(0, id.length - 13));
       if (name === "user_agent") {
         uaCache[domain] = value;
       } else if (name === "client_hints") {
         try {
           hintsCache[domain] = JSON.parse(value);
-        } catch (e) {}
+        } catch (e) {
+        }
       } else if (name && value) {
         let exp = Number(row.expirationDate);
         if (exp > 0 && exp < 1e11) {
-          exp = exp * 1000;
+          exp = exp * 1e3;
         }
         let savedAt = Number(row.local_saved_at);
         if (savedAt > 0 && savedAt < 1e11) {
-          savedAt = savedAt * 1000;
+          savedAt = savedAt * 1e3;
         }
         let isValid = false;
         let expiryTime = 0;
@@ -158,20 +137,16 @@ async function initCache() {
             expiryTime = exp;
           }
         } else if (!isNaN(savedAt) && savedAt > 0) {
-          if (now - savedAt < 24 * 60 * 60 * 1000) {
+          if (now - savedAt < 24 * 60 * 60 * 1e3) {
             isValid = true;
-            expiryTime = savedAt + 24 * 60 * 60 * 1000;
+            expiryTime = savedAt + 24 * 60 * 60 * 1e3;
           }
         } else if (value) {
           isValid = true;
-          expiryTime = now + 24 * 60 * 60 * 1000;
+          expiryTime = now + 24 * 60 * 60 * 1e3;
         }
-
         if (isValid) {
-          const normDom = domain
-            .replace(/^www\./, "")
-            .replace(/^\./, "")
-            .toLowerCase();
+          const normDom = domain.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
           cookieCache[normDom] = cookieCache[normDom] || {};
           cookieCache[normDom][name] = { value, expiry: expiryTime };
         }
@@ -181,24 +156,19 @@ async function initCache() {
     console.error("[proxyHeaders] Failed to init memory cache:", e.message);
   }
 }
-
 function updateCache(domain, name, value, expirationDate, local_saved_at) {
   if (!domain) return;
-  const cleanDom = domain
-    .replace(/^www\./, "")
-    .replace(/^\./, "")
-    .toLowerCase();
+  const cleanDom = domain.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
   console.log(
-    `[proxyHeaders] updateCache called: domain=${domain}, cleanDom=${cleanDom}, name=${name}, hasValue=${!!value}`,
+    `[proxyHeaders] updateCache called: domain=${domain}, cleanDom=${cleanDom}, name=${name}, hasValue=${!!value}`
   );
-
   if (name === "user_agent") {
     uaCache[cleanDom] = value;
   } else if (name === "client_hints") {
     try {
-      hintsCache[cleanDom] =
-        typeof value === "string" ? JSON.parse(value) : value;
-    } catch (e) {}
+      hintsCache[cleanDom] = typeof value === "string" ? JSON.parse(value) : value;
+    } catch (e) {
+    }
   } else if (name) {
     if (!value) {
       if (cookieCache[cleanDom]) {
@@ -208,11 +178,11 @@ function updateCache(domain, name, value, expirationDate, local_saved_at) {
     }
     let exp = Number(expirationDate);
     if (exp > 0 && exp < 1e11) {
-      exp = exp * 1000;
+      exp = exp * 1e3;
     }
     let savedAt = Number(local_saved_at);
     if (savedAt > 0 && savedAt < 1e11) {
-      savedAt = savedAt * 1000;
+      savedAt = savedAt * 1e3;
     }
     const now = Date.now();
     let isValid = false;
@@ -223,15 +193,14 @@ function updateCache(domain, name, value, expirationDate, local_saved_at) {
         expiryTime = exp;
       }
     } else if (!isNaN(savedAt) && savedAt > 0) {
-      if (now - savedAt < 24 * 60 * 60 * 1000) {
+      if (now - savedAt < 24 * 60 * 60 * 1e3) {
         isValid = true;
-        expiryTime = savedAt + 24 * 60 * 60 * 1000;
+        expiryTime = savedAt + 24 * 60 * 60 * 1e3;
       }
     } else if (value) {
       isValid = true;
-      expiryTime = now + 24 * 60 * 60 * 1000;
+      expiryTime = now + 24 * 60 * 60 * 1e3;
     }
-
     if (isValid) {
       cookieCache[cleanDom] = cookieCache[cleanDom] || {};
       cookieCache[cleanDom][name] = { value, expiry: expiryTime };
@@ -240,19 +209,17 @@ function updateCache(domain, name, value, expirationDate, local_saved_at) {
     }
   }
 }
-
 function getHeaders(url, method = "GET") {
   let cookieDomain = "";
   try {
     cookieDomain = new URL(url).hostname;
-  } catch (e) {}
-
+  } catch (e) {
+  }
   let cleanDomain = "";
   if (cookieDomain) {
     cleanDomain = cookieDomain.replace("www.", "").toLowerCase();
     cleanDomain = getCanonicalDomain(cleanDomain);
   }
-
   const chromeVer = process.versions.chrome || "148.0.7778.218";
   let userAgent = global.deviceUserAgent;
   if (!userAgent) {
@@ -266,35 +233,21 @@ function getHeaders(url, method = "GET") {
       userAgent = `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVer} Mobile Safari/537.36`;
     }
   }
-
   const targetDomains = Array.from(
-    new Set([cleanDomain, cookieDomain].filter(Boolean)),
-  ).map((d) =>
-    d
-      .replace(/^www\./, "")
-      .replace(/^\./, "")
-      .toLowerCase(),
+    new Set([cleanDomain, cookieDomain].filter(Boolean))
+  ).map(
+    (d) => d.replace(/^www\./, "").replace(/^\./, "").toLowerCase()
   );
-
   const extraCookieDomains = getCookieDomains(cleanDomain);
   if (extraCookieDomains.length > 0) {
     targetDomains.push(...extraCookieDomains);
   }
-
-  // Load custom User-Agent if bypassed
   if (targetDomains.length > 0) {
     let matchedUA = null;
     for (const target of targetDomains) {
       for (const [dom, uaVal] of Object.entries(uaCache)) {
-        const normDom = dom
-          .replace(/^www\./, "")
-          .replace(/^\./, "")
-          .toLowerCase();
-        if (
-          target === normDom ||
-          target.endsWith("." + normDom) ||
-          normDom.endsWith("." + target)
-        ) {
+        const normDom = dom.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
+        if (target === normDom || target.endsWith("." + normDom) || normDom.endsWith("." + target)) {
           matchedUA = uaVal;
           break;
         }
@@ -305,42 +258,19 @@ function getHeaders(url, method = "GET") {
       userAgent = matchedUA;
     }
   }
-
   const urlLower = String(url || "").toLowerCase();
-  const isImage =
-    urlLower.includes(".webp") ||
-    urlLower.includes(".jpg") ||
-    urlLower.includes(".jpeg") ||
-    urlLower.includes(".png") ||
-    urlLower.includes(".gif") ||
-    urlLower.includes(".avif") ||
-    urlLower.includes("/snapshots/") ||
-    urlLower.includes("/uploads/") ||
-    urlLower.includes("/posters/") ||
-    urlLower.includes("/covers/");
-
+  const isImage = urlLower.includes(".webp") || urlLower.includes(".jpg") || urlLower.includes(".jpeg") || urlLower.includes(".png") || urlLower.includes(".gif") || urlLower.includes(".avif") || urlLower.includes("/snapshots/") || urlLower.includes("/uploads/") || urlLower.includes("/posters/") || urlLower.includes("/covers/");
   const headers = {
     "User-Agent": userAgent,
-    Accept: isImage
-      ? "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-      : "*/*",
-    "Accept-Language": "en-US,en;q=0.9",
+    Accept: isImage ? "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" : "*/*",
+    "Accept-Language": "en-US,en;q=0.9"
   };
-
-  // Load Client Hints if bypassed
   if (targetDomains.length > 0) {
     let matchedHints = null;
     for (const target of targetDomains) {
       for (const [dom, hintsVal] of Object.entries(hintsCache)) {
-        const normDom = dom
-          .replace(/^www\./, "")
-          .replace(/^\./, "")
-          .toLowerCase();
-        if (
-          target === normDom ||
-          target.endsWith("." + normDom) ||
-          normDom.endsWith("." + target)
-        ) {
+        const normDom = dom.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
+        if (target === normDom || target.endsWith("." + normDom) || normDom.endsWith("." + target)) {
           matchedHints = hintsVal;
           break;
         }
@@ -353,15 +283,12 @@ function getHeaders(url, method = "GET") {
       }
     }
   }
-
-  // 1. Prioritize dynamically learned referer headers from extensions/scrapers/player
   try {
     const domain = new URL(url).hostname.replace("www.", "");
     const ref = getStoredStreamReferer(domain);
     if (ref) headers.Referer = ref;
-  } catch (e) {}
-
-  // 2. Query extension registry for extension header rules & subrequest headers
+  } catch (e) {
+  }
   const extRules = getExtensionHeaderRules(url);
   if (extRules) {
     if (extRules.headers) {
@@ -380,10 +307,8 @@ function getHeaders(url, method = "GET") {
       headers._strip = extRules.strip;
     }
   }
-
-  // 3. Fallback to origin if Referer is not explicitly stripped
   const isRefererStripped = headers._strip?.some(
-    (h) => h.toLowerCase() === "referer",
+    (h) => h.toLowerCase() === "referer"
   );
   if (!headers.Referer && !isRefererStripped) {
     try {
@@ -391,30 +316,22 @@ function getHeaders(url, method = "GET") {
       if (urlObj.protocol === "http:" || urlObj.protocol === "https:") {
         headers.Referer = urlObj.origin + "/";
       }
-    } catch (e) {}
+    } catch (e) {
+    }
   }
-
   if (!headers.Referer && !isRefererStripped) {
     if (refererCache["__fallback__"]) {
       headers.Referer = refererCache["__fallback__"];
     }
   }
-
   if (targetDomains.length > 0) {
     const now = Date.now();
     const cookiePairs = [];
-    const seenNames = new Set();
-
+    const seenNames = /* @__PURE__ */ new Set();
     for (const [dom, domCookies] of Object.entries(cookieCache)) {
-      const normDom = dom
-        .replace(/^www\./, "")
-        .replace(/^\./, "")
-        .toLowerCase();
+      const normDom = dom.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
       const isMatch = targetDomains.some(
-        (normTarget) =>
-          normTarget === normDom ||
-          normTarget.endsWith("." + normDom) ||
-          normDom.endsWith("." + normTarget),
+        (normTarget) => normTarget === normDom || normTarget.endsWith("." + normDom) || normDom.endsWith("." + normTarget)
       );
       if (isMatch) {
         if (domCookies && typeof domCookies === "object") {
@@ -433,7 +350,6 @@ function getHeaders(url, method = "GET") {
       headers.Cookie = cookiePairs.join("; ");
     }
   }
-
   const reqMethod = String(method).toUpperCase();
   if (headers.Referer && reqMethod !== "GET" && reqMethod !== "HEAD") {
     try {
@@ -441,67 +357,40 @@ function getHeaders(url, method = "GET") {
       if (refUrl.protocol === "http:" || refUrl.protocol === "https:") {
         headers.Origin = refUrl.origin;
       }
-    } catch (e) {}
+    } catch (e) {
+    }
   }
-
   return headers;
 }
-
 global.clearCookieCache = (domain) => {
   if (!domain) return;
-  const normalized = domain
-    .replace(/^www\./, "")
-    .replace(/^\./, "")
-    .toLowerCase();
+  const normalized = domain.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
   for (const key of Object.keys(cookieCache)) {
-    const normKey = key
-      .replace(/^www\./, "")
-      .replace(/^\./, "")
-      .toLowerCase();
-    if (
-      normKey === normalized ||
-      normKey.endsWith("." + normalized) ||
-      normalized.endsWith("." + normKey)
-    ) {
+    const normKey = key.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
+    if (normKey === normalized || normKey.endsWith("." + normalized) || normalized.endsWith("." + normKey)) {
       delete cookieCache[key];
     }
   }
   for (const key of Object.keys(uaCache)) {
-    const normKey = key
-      .replace(/^www\./, "")
-      .replace(/^\./, "")
-      .toLowerCase();
-    if (
-      normKey === normalized ||
-      normKey.endsWith("." + normalized) ||
-      normalized.endsWith("." + normKey)
-    ) {
+    const normKey = key.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
+    if (normKey === normalized || normKey.endsWith("." + normalized) || normalized.endsWith("." + normKey)) {
       delete uaCache[key];
     }
   }
   for (const key of Object.keys(hintsCache)) {
-    const normKey = key
-      .replace(/^www\./, "")
-      .replace(/^\./, "")
-      .toLowerCase();
-    if (
-      normKey === normalized ||
-      normKey.endsWith("." + normalized) ||
-      normalized.endsWith("." + normKey)
-    ) {
+    const normKey = key.replace(/^www\./, "").replace(/^\./, "").toLowerCase();
+    if (normKey === normalized || normKey.endsWith("." + normalized) || normalized.endsWith("." + normKey)) {
       delete hintsCache[key];
     }
   }
 };
-
 global.updateCookieCache = updateCache;
-
 if (global.db) {
-  initCache().catch(() => {});
+  initCache().catch(() => {
+  });
 }
-
 module.exports = {
   getHeaders,
   initCache,
-  updateCache,
+  updateCache
 };

@@ -7,7 +7,7 @@ function makeStreamSafe(stream) {
   }
   if (typeof stream.write === "function") {
     const originalWrite = stream.write.bind(stream);
-    stream.write = function (chunk, encoding, callback) {
+    stream.write = function(chunk, encoding, callback) {
       try {
         return originalWrite(chunk, encoding, (err) => {
           if (err && (err.code === "EIO" || err.code === "EPIPE")) {
@@ -26,37 +26,33 @@ function makeStreamSafe(stream) {
     };
   }
 }
-
 makeStreamSafe(process.stdout);
 makeStreamSafe(process.stderr);
 if (console && console._stdout) makeStreamSafe(console._stdout);
 if (console && console._stderr) makeStreamSafe(console._stderr);
-
 if (typeof global.sendToRenderer !== "function") {
-  global.sendToRenderer = () => {};
+  global.sendToRenderer = () => {
+  };
 }
-
 const winston = require("winston");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { getUserDataPath } = require("./constants");
-
 const logDir = getUserDataPath();
-
 const LogFilePath = path.join(logDir, "app.log");
 const PrevLogFilePath = path.join(logDir, "app-previous.log");
 const CrashLogFilePath = path.join(logDir, "crash.log");
-
 try {
   if (fs.existsSync(LogFilePath)) {
     try {
       fs.copyFileSync(LogFilePath, PrevLogFilePath);
-    } catch (_) {}
+    } catch (_) {
+    }
     fs.unlinkSync(LogFilePath);
   }
-} catch (_) {}
-
+} catch (_) {
+}
 process.on("uncaughtException", (err) => {
   if (err && (err.code === "EIO" || err.code === "EPIPE")) return;
   const msg = `[FATAL UNCAUGHT EXCEPTION] ${err?.stack || err?.message || err}`;
@@ -64,31 +60,41 @@ process.on("uncaughtException", (err) => {
     if (logger && typeof logger.error === "function") {
       logger.error(msg);
     }
-  } catch (_) {}
+  } catch (_) {
+  }
   try {
-    fs.appendFileSync(LogFilePath, `\n${new Date().toISOString()} [fatal]: ${msg}\n`);
-    fs.appendFileSync(CrashLogFilePath, `\n${new Date().toISOString()} [fatal]: ${msg}\n`);
-  } catch (_) {}
+    fs.appendFileSync(LogFilePath, `
+${(/* @__PURE__ */ new Date()).toISOString()} [fatal]: ${msg}
+`);
+    fs.appendFileSync(CrashLogFilePath, `
+${(/* @__PURE__ */ new Date()).toISOString()} [fatal]: ${msg}
+`);
+  } catch (_) {
+  }
 });
-
 process.on("unhandledRejection", (reason) => {
   const msg = `[FATAL UNHANDLED REJECTION] ${reason?.stack || reason?.message || reason}`;
   try {
     if (logger && typeof logger.error === "function") {
       logger.error(msg);
     }
-  } catch (_) {}
+  } catch (_) {
+  }
   try {
-    fs.appendFileSync(LogFilePath, `\n${new Date().toISOString()} [fatal]: ${msg}\n`);
-    fs.appendFileSync(CrashLogFilePath, `\n${new Date().toISOString()} [fatal]: ${msg}\n`);
-  } catch (_) {}
+    fs.appendFileSync(LogFilePath, `
+${(/* @__PURE__ */ new Date()).toISOString()} [fatal]: ${msg}
+`);
+    fs.appendFileSync(CrashLogFilePath, `
+${(/* @__PURE__ */ new Date()).toISOString()} [fatal]: ${msg}
+`);
+  } catch (_) {
+  }
 });
-
 function formatLogMessage(info) {
   if (info.message instanceof Error) {
     return info.message.message;
   }
-  if (info.message !== undefined && info.message !== null) {
+  if (info.message !== void 0 && info.message !== null) {
     return info.message;
   }
   if (info.stack) {
@@ -96,32 +102,25 @@ function formatLogMessage(info) {
   }
   return "";
 }
-
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.printf((info) => {
       return `${info.timestamp} [${info.level}]: ${formatLogMessage(info)}`;
-    }),
+    })
   ),
   transports: [
     new winston.transports.File({
-      filename: LogFilePath,
+      filename: LogFilePath
     }),
     new winston.transports.Console({
       format: winston.format.printf((info) => {
         return `[${info.level}]: ${formatLogMessage(info)}`;
-      }),
-    }),
-  ],
+      })
+    })
+  ]
 });
-
-// Extension + backend code logs via console.* everywhere; mirror it
-// into app.log so the Logs screen shows scraper diagnostics too.
-// (winston's Console transport writes to process streams directly,
-// so this cannot recurse. The AppLogger-error marker is skipped to
-// avoid any feedback through the logger error handler.)
 let mirroringConsole = false;
 try {
   const util = require("util");
@@ -148,12 +147,11 @@ try {
   mirror("warn", "warn");
   mirror("debug", "debug");
   mirror("error", "error");
-} catch (_) {}
-
+} catch (_) {
+}
 logger.on("error", (err) => {
   console.error("[AppLogger Error]:", err?.message || err);
 });
-
 function getLogs() {
   return new Promise((resolve) => {
     try {
@@ -162,26 +160,29 @@ function getLogs() {
       if (fs.existsSync(activePath)) {
         try {
           currentLogs = fs.readFileSync(activePath, "utf8");
-        } catch (_) {}
+        } catch (_) {
+        }
       }
-
       let crashLogs = "";
       const crashCandidates = [
         CrashLogFilePath,
         path.join(os.homedir(), "Strawverse", "data", "crash.log"),
-        "/sdcard/Strawverse/data/crash.log",
+        "/sdcard/Strawverse/data/crash.log"
       ];
       for (const cp of crashCandidates) {
         if (fs.existsSync(cp)) {
           try {
             const content = fs.readFileSync(cp, "utf8");
             if (content && content.trim()) {
-              crashLogs += `\n[CRASH REPORT: ${cp}]\n${content.trim()}\n`;
+              crashLogs += `
+[CRASH REPORT: ${cp}]
+${content.trim()}
+`;
             }
-          } catch (_) {}
+          } catch (_) {
+          }
         }
       }
-
       let prevLogs = "";
       if (fs.existsSync(PrevLogFilePath)) {
         try {
@@ -189,15 +190,23 @@ function getLogs() {
           if (content && content.trim()) {
             prevLogs = content.trim();
           }
-        } catch (_) {}
+        } catch (_) {
+        }
       }
-
       let combined = "";
       if (crashLogs.trim()) {
-        combined += `=======================================================\n${crashLogs.trim()}\n=======================================================\n\n`;
+        combined += `=======================================================
+${crashLogs.trim()}
+=======================================================
+
+`;
       }
       if (prevLogs) {
-        combined += `=== PREVIOUS SESSION (BEFORE LAST RESTART / CRASH) ===\n${prevLogs}\n\n=== CURRENT SESSION ===\n`;
+        combined += `=== PREVIOUS SESSION (BEFORE LAST RESTART / CRASH) ===
+${prevLogs}
+
+=== CURRENT SESSION ===
+`;
       }
       combined += currentLogs || "No current session log messages available.";
       resolve(combined);
@@ -206,7 +215,6 @@ function getLogs() {
     }
   });
 }
-
 function clearLogs() {
   return new Promise((resolve, reject) => {
     try {
@@ -214,23 +222,26 @@ function clearLogs() {
       if (fs.existsSync(PrevLogFilePath)) {
         try {
           fs.unlinkSync(PrevLogFilePath);
-        } catch (_) {}
+        } catch (_) {
+        }
       }
       if (fs.existsSync(CrashLogFilePath)) {
         try {
           fs.unlinkSync(CrashLogFilePath);
-        } catch (_) {}
+        } catch (_) {
+        }
       }
       const publicCrash = path.join(
         os.homedir(),
         "Strawverse",
         "data",
-        "crash.log",
+        "crash.log"
       );
       if (fs.existsSync(publicCrash)) {
         try {
           fs.unlinkSync(publicCrash);
-        } catch (_) {}
+        } catch (_) {
+        }
       }
       resolve();
     } catch (err) {
@@ -238,42 +249,33 @@ function clearLogs() {
     }
   });
 }
-
-// ---- External (rotated) log files ----
-// Kept outside the app data dir so users can find and share them.
 const MAX_LOG_FILES_HARD_LIMIT = 10;
 const MAX_LOG_TOTAL_BYTES = 500 * 1024 * 1024;
-
 function getExternalLogDir() {
   const dir = path.join(os.homedir(), "StrawVerse", "logs");
   try {
     fs.mkdirSync(dir, { recursive: true });
-  } catch (_) {}
+  } catch (_) {
+  }
   return dir;
 }
-
 function listExternalLogFiles(dir) {
   let files = [];
   try {
-    files = fs
-      .readdirSync(dir)
-      .filter((n) => /^strawverse-.*\.log$/i.test(n))
-      .map((n) => {
-        const p = path.join(dir, n);
-        const st = fs.statSync(p);
-        return { path: p, name: n, mtimeMs: st.mtimeMs, size: st.size };
-      })
-      .sort((a, b) => a.mtimeMs - b.mtimeMs);
-  } catch (_) {}
+    files = fs.readdirSync(dir).filter((n) => /^strawverse-.*\.log$/i.test(n)).map((n) => {
+      const p = path.join(dir, n);
+      const st = fs.statSync(p);
+      return { path: p, name: n, mtimeMs: st.mtimeMs, size: st.size };
+    }).sort((a, b) => a.mtimeMs - b.mtimeMs);
+  } catch (_) {
+  }
   return files;
 }
-
 function clampLogFileCount(n) {
   const v = parseInt(n, 10);
   if (isNaN(v)) return 5;
   return Math.min(Math.max(v, 1), MAX_LOG_FILES_HARD_LIMIT);
 }
-
 function pruneExternalLogs(dir, maxFiles) {
   const removed = [];
   try {
@@ -284,7 +286,8 @@ function pruneExternalLogs(dir, maxFiles) {
       try {
         fs.unlinkSync(oldest.path);
         removed.push(oldest.name);
-      } catch (_) {}
+      } catch (_) {
+      }
     }
     let total = files.reduce((sum, fl) => sum + fl.size, 0);
     while (total > MAX_LOG_TOTAL_BYTES && files.length > 0) {
@@ -297,12 +300,12 @@ function pruneExternalLogs(dir, maxFiles) {
         break;
       }
     }
-  } catch (_) {}
+  } catch (_) {
+  }
   return removed;
 }
-
 function buildSessionLogPath(dir) {
-  const d = new Date();
+  const d = /* @__PURE__ */ new Date();
   const pad = (n) => String(n).padStart(2, "0");
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   let p = path.join(dir, `strawverse-${stamp}.log`);
@@ -313,33 +316,27 @@ function buildSessionLogPath(dir) {
   }
   return p;
 }
-
 let externalFileTransport = null;
 let currentExternalLogPath = null;
 let externalLogActive = false;
-
 function getCurrentLogPath() {
-  return externalLogActive && currentExternalLogPath
-    ? currentExternalLogPath
-    : LogFilePath;
+  return externalLogActive && currentExternalLogPath ? currentExternalLogPath : LogFilePath;
 }
-
 function configureExternalLogs(opts = {}) {
-  const dirOverride =
-    opts && typeof opts.dir === "string" && opts.dir.trim()
-      ? opts.dir
-      : null;
+  const dirOverride = opts && typeof opts.dir === "string" && opts.dir.trim() ? opts.dir : null;
   const max = clampLogFileCount(opts.maxFiles);
   if (!opts.enabled) {
     if (externalFileTransport) {
       try {
         logger.remove(externalFileTransport);
-      } catch (_) {}
+      } catch (_) {
+      }
       try {
         if (typeof externalFileTransport.close === "function") {
           externalFileTransport.close();
         }
-      } catch (_) {}
+      } catch (_) {
+      }
       externalFileTransport = null;
     }
     externalLogActive = false;
@@ -353,7 +350,7 @@ function configureExternalLogs(opts = {}) {
     }
     if (!externalFileTransport) {
       externalFileTransport = new winston.transports.File({
-        filename: currentExternalLogPath,
+        filename: currentExternalLogPath
       });
       logger.add(externalFileTransport);
     }
@@ -365,7 +362,6 @@ function configureExternalLogs(opts = {}) {
     return { active: false, error: err?.message };
   }
 }
-
 module.exports = {
   logger,
   getLogs,
@@ -375,5 +371,5 @@ module.exports = {
   pruneExternalLogs,
   getCurrentLogPath,
   MAX_LOG_FILES_HARD_LIMIT,
-  MAX_LOG_TOTAL_BYTES,
+  MAX_LOG_TOTAL_BYTES
 };

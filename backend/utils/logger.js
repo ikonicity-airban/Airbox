@@ -1,10 +1,5 @@
 class HLSLogger {
-  constructor(
-    caption = "downloading",
-    epid = "downloadep",
-    _indent = 0,
-    quiet = false,
-  ) {
+  constructor(caption = "downloading", epid = "downloadep", _indent = 0, quiet = false) {
     this.quiet = quiet;
     this.totalSegments = 0;
     this.currentSegments = 0;
@@ -14,29 +9,26 @@ class HLSLogger {
   }
   logProgress() {
     const now = Date.now();
-    const isFinal =
-      this.currentSegments >= this.totalSegments || this.totalSegments === 0;
+    const isFinal = this.currentSegments >= this.totalSegments || this.totalSegments === 0;
     if (!isFinal && this.currentSegments > 1 && now - this.lastLogTime < 800) {
       return;
     }
     this.lastLogTime = now;
-
     fetch(`http://localhost:${global.PORT}/api/logger`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         caption: this.caption,
         totalSegments: this.totalSegments,
         currentSegments: this.currentSegments,
-        epid: this.epid,
-      }),
+        epid: this.epid
+      })
     }).catch((err) => {
       console.log("Error updating download progress:", err);
     });
   }
-
   logger = (...args) => {
     if (!this.quiet && typeof args[0] === "string") {
       const matches = args[0].match(/Queueing (\d+) segment/);
@@ -54,5 +46,4 @@ class HLSLogger {
     }
   };
 }
-
 module.exports = HLSLogger;

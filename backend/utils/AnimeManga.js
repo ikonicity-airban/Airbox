@@ -3,7 +3,6 @@ const path = require("path");
 const crypto = require("crypto");
 const JSZip = require("jszip");
 const fs = require("fs");
-
 const HLSLogger = require("./logger");
 const { logger } = require("./AppLogger");
 const { providerFetch } = require("./settings");
@@ -14,47 +13,26 @@ const { verifyStreamReachability } = require("./streamVerifier");
 const {
   hasLocalMediaFiles,
   cleanAlphanumeric,
-  SEASON_FOLDER_RE,
+  SEASON_FOLDER_RE
 } = require("./constants");
-
 const cache = new NodeCache({ stdTTL: 60, checkperiod: 60 });
-
 async function enrichWithLibraryTags(type, items) {
   if (!items || !Array.isArray(items) || items.length === 0) return items;
-
   try {
     const normType = String(type || "").toLowerCase();
     const isMovieType = normType === "movies";
-    const table =
-      normType === "manga" ? "Manga" : isMovieType ? "Movies" : "Anime";
+    const table = normType === "manga" ? "Manga" : isMovieType ? "Movies" : "Anime";
     const ids = items.map((i) => i.id).filter(Boolean);
-    const malIds = isMovieType
-      ? []
-      : items
-          .map((i) => String(i.malid || i.MalID || ""))
-          .filter((b) => b && b !== "undefined" && b !== "null");
-    const cleanTitles = items
-      .map((i) => (i.title ? cleanAlphanumeric(i.title) : ""))
-      .filter(Boolean);
-
+    const malIds = isMovieType ? [] : items.map((i) => String(i.malid || i.MalID || "")).filter((b) => b && b !== "undefined" && b !== "null");
+    const cleanTitles = items.map((i) => i.title ? cleanAlphanumeric(i.title) : "").filter(Boolean);
     if (ids.length === 0 && malIds.length === 0 && cleanTitles.length === 0) {
       return items;
     }
-
     const idPlaceholders = ids.length ? ids.map(() => "?").join(",") : "NULL";
-    const malPlaceholders = malIds.length
-      ? malIds.map(() => "?").join(",")
-      : "NULL";
-    const titlePlaceholders = cleanTitles.length
-      ? cleanTitles.map(() => "?").join(",")
-      : "NULL";
-
-    const selectCols = isMovieType
-      ? "id, title, folder_name, CustomTag"
-      : "id, MalID, title, folder_name, CustomTag";
-    const malClause =
-      isMovieType || !malIds.length ? "" : `OR MalID IN (${malPlaceholders})`;
-
+    const malPlaceholders = malIds.length ? malIds.map(() => "?").join(",") : "NULL";
+    const titlePlaceholders = cleanTitles.length ? cleanTitles.map(() => "?").join(",") : "NULL";
+    const selectCols = isMovieType ? "id, title, folder_name, CustomTag" : "id, MalID, title, folder_name, CustomTag";
+    const malClause = isMovieType || !malIds.length ? "" : `OR MalID IN (${malPlaceholders})`;
     const sql = `
       SELECT ${selectCols} FROM ${table} 
       WHERE CustomTag IS NOT NULL AND CustomTag != '' AND CustomTag != '[]'
@@ -65,21 +43,16 @@ async function enrichWithLibraryTags(type, items) {
           OR LOWER(REPLACE(REPLACE(REPLACE(REPLACE(folder_name, ' ', ''), ':', ''), '-', ''), '_', '')) IN (${titlePlaceholders})
         )
     `;
-
     const params = [];
     if (ids.length) params.push(...ids);
     if (malIds.length) params.push(...malIds);
     if (cleanTitles.length) params.push(...cleanTitles);
     if (cleanTitles.length) params.push(...cleanTitles);
-
     const matches = await queryAll(sql, params);
-
     if (!matches || matches.length === 0) return items;
-
-    const matchById = new Map();
-    const matchByMal = new Map();
-    const matchByTitle = new Map();
-
+    const matchById = /* @__PURE__ */ new Map();
+    const matchByMal = /* @__PURE__ */ new Map();
+    const matchByTitle = /* @__PURE__ */ new Map();
     for (const m of matches) {
       if (!m.CustomTag) continue;
       if (m.id) matchById.set(m.id, m.CustomTag);
@@ -93,54 +66,40 @@ async function enrichWithLibraryTags(type, items) {
         if (clean) matchByTitle.set(clean, m.CustomTag);
       }
     }
-
     for (const item of items) {
-      const tag =
-        matchById.get(item.id) ||
-        matchByMal.get(String(item.malid || item.MalID || "")) ||
-        (item.title ? matchByTitle.get(cleanAlphanumeric(item.title)) : null);
-
+      const tag = matchById.get(item.id) || matchByMal.get(String(item.malid || item.MalID || "")) || (item.title ? matchByTitle.get(cleanAlphanumeric(item.title)) : null);
       if (tag) {
         item.CustomTag = tag;
       }
     }
-  } catch (_) {}
+  } catch (_) {
+  }
   return items;
 }
-
-//====================================== Anime ================================
-// find popular anime
 async function latestAnime(provider, filters) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `latestanime_${provider.provider_name}_${JSON.stringify(filters)}`,
+    `latestanime_${provider.provider_name}_${JSON.stringify(filters)}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     if (cachedData.results)
       await enrichWithLibraryTags("Anime", cachedData.results);
     return cachedData;
   }
-
   const data = await provider.provider.fetchRecentEpisodes(filters);
   if (data?.results) await enrichWithLibraryTags("Anime", data.results);
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-// search anime
 async function animesearch(provider, Anime_NAME, filters = {}) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   let dataarray = { results: [] };
   const formattedAnimeName = Anime_NAME.replace(/\w\S*/g, (word) => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -148,27 +107,18 @@ async function animesearch(provider, Anime_NAME, filters = {}) {
   let datafirst;
   try {
     datafirst = await findanime(provider, formattedAnimeName, filters);
-    if (
-      !datafirst ||
-      !datafirst?.data ||
-      !datafirst?.data?.length ||
-      datafirst?.data?.length <= 0
-    ) {
+    if (!datafirst || !datafirst?.data || !datafirst?.data?.length || datafirst?.data?.length <= 0) {
       datafirst = await findanime(provider, Anime_NAME, filters);
     }
-
     if (datafirst) {
-      // results
       if (datafirst.data && datafirst.data.length > 0) {
         dataarray.results.push(...datafirst.data);
       }
-      // next page
       if (datafirst?.hasNextPage) {
         dataarray.hasNextPage = datafirst.hasNextPage;
       } else {
         dataarray.hasNextPage = false;
       }
-      // currentPage
       if (datafirst?.currentPage) {
         dataarray.currentPage = datafirst.currentPage;
       } else {
@@ -180,29 +130,22 @@ async function animesearch(provider, Anime_NAME, filters = {}) {
   }
   return dataarray;
 }
-
-// find more anime
 async function findanime(provider, Anime_NAME, filters) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
     `animesearch_${provider.provider_name}_${Anime_NAME}__${JSON.stringify(
-      filters,
-    )}`,
+      filters
+    )}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     if (cachedData.data) await enrichWithLibraryTags("Anime", cachedData.data);
     return cachedData;
   }
-
   const data = await provider.provider.SearchAnime(Anime_NAME, filters);
-
   if (data.results.length <= 0) {
     throw new Error(`No Anime Found With This Name`);
   } else {
@@ -212,52 +155,42 @@ async function findanime(provider, Anime_NAME, filters) {
       {
         data: data.results,
         hasNextPage: data.hasNextPage,
-        currentPage: data.currentPage,
+        currentPage: data.currentPage
       },
-      60,
+      60
     );
-
     return {
       data: data.results,
       hasNextPage: data.hasNextPage,
-      currentPage: data.currentPage,
+      currentPage: data.currentPage
     };
   }
 }
-
-// anime info
 async function animeinfo(provider, dir, animeId) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `animeinfo_${provider.provider_name}_${animeId}`,
+    `animeinfo_${provider.provider_name}_${animeId}`
   );
-
   const cachedData = cache.get(cacheKey);
   if (cachedData) {
     return cachedData;
   }
-
   const data = await provider.provider.AnimeInfo(animeId);
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-// anime fetch ep list
 async function fetchEpisode(provider, id, page = 1) {
   try {
     if (!provider?.provider)
       throw new Error(
-        "Missing Provider! ( try downloading from settings > marketplace )",
+        "Missing Provider! ( try downloading from settings > marketplace )"
       );
-
     const cacheKey = CreateHashKey(
-      `animeplaylist_${provider.provider_name}_${id}_${page}`,
+      `animeplaylist_${provider.provider_name}_${id}_${page}`
     );
-
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
       return cachedData;
@@ -271,14 +204,11 @@ async function fetchEpisode(provider, id, page = 1) {
     throw err;
   }
 }
-
-// fetch m3u8 links
 async function fetchEpisodeSources(provider, episodeId, category = null) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   let cleanEpisodeId = String(episodeId ?? "");
   const suffixMatch = cleanEpisodeId.match(/-(sub|dub|hsub|both)$/);
   if (suffixMatch) {
@@ -287,16 +217,14 @@ async function fetchEpisodeSources(provider, episodeId, category = null) {
     }
     cleanEpisodeId = cleanEpisodeId.slice(0, -suffixMatch[0].length);
   }
-
   const cacheKey = CreateHashKey(
-    `animeepisodesources_${provider.provider_name}_${cleanEpisodeId}_${category ? String(category).toLowerCase() : "all"}`,
+    `animeepisodesources_${provider.provider_name}_${cleanEpisodeId}_${category ? String(category).toLowerCase() : "all"}`
   );
-
   let sources = cache.get(cacheKey);
   if (sources && category) {
     const requestedCat = String(category).toLowerCase();
     const hasMatchingType = (sources.sources || []).some(
-      (s) => (s.type || "").toLowerCase() === requestedCat,
+      (s) => (s.type || "").toLowerCase() === requestedCat
     );
     if (!hasMatchingType && (sources.sources || []).length > 0) {
       sources = null;
@@ -305,87 +233,69 @@ async function fetchEpisodeSources(provider, episodeId, category = null) {
   if (!sources) {
     sources = await provider.provider.fetchEpisodeSources(
       cleanEpisodeId,
-      category,
+      category
     );
     if (sources) {
       cache.set(cacheKey, sources, 60);
     }
   }
-
   if (sources && global.setDynamicReferer) {
     const allSources = [
-      ...(Array.isArray(sources.sources) ? sources.sources : []),
-      ...(sources.sub?.sources || []),
-      ...(sources.dub?.sources || []),
+      ...Array.isArray(sources.sources) ? sources.sources : [],
+      ...sources.sub?.sources || [],
+      ...sources.dub?.sources || []
     ];
     const allSubtitles = [
-      ...(Array.isArray(sources.subtitles) ? sources.subtitles : []),
-      ...(sources.sub?.subtitles || []),
-      ...(sources.dub?.subtitles || []),
+      ...Array.isArray(sources.subtitles) ? sources.subtitles : [],
+      ...sources.sub?.subtitles || [],
+      ...sources.dub?.subtitles || []
     ];
     for (const item of [...allSources, ...allSubtitles]) {
       if (item?.url) {
         try {
           const cdnDomain = new URL(item.url).hostname;
-          const ref =
-            item.headers?.Referer ||
-            item.headers?.referer ||
-            item.referer ||
-            (item.extra && item.extra[0]);
+          const ref = item.headers?.Referer || item.headers?.referer || item.referer || item.extra && item.extra[0];
           if (ref) {
             global.setDynamicReferer(cdnDomain, ref);
           }
-        } catch (e) {}
+        } catch (e) {
+        }
       }
     }
   }
-
   return sources;
 }
-
-//====================================== Manga ================================
-
-// Latest Manga
 async function latestMangas(provider, Page = 1, filters = {}) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `latestmanga_${provider.provider_name}_${Page}_${JSON.stringify(filters)}`,
+    `latestmanga_${provider.provider_name}_${Page}_${JSON.stringify(filters)}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     if (cachedData.results)
       await enrichWithLibraryTags("Manga", cachedData.results);
     if (cachedData.data) await enrichWithLibraryTags("Manga", cachedData.data);
     return cachedData;
   }
-
   let data = await provider.provider.latestManga(Page, filters);
   if (data?.results) await enrichWithLibraryTags("Manga", data.results);
   if (data?.data) await enrichWithLibraryTags("Manga", data.data);
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-// Manga Search
 async function MangaSearch(provider, MANGA_NAME, PAGE = 1, filters = {}) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   try {
     const cacheKey = CreateHashKey(
-      `mangasearch_${provider.provider_name}_${MANGA_NAME}_${PAGE}_${JSON.stringify(filters)}`,
+      `mangasearch_${provider.provider_name}_${MANGA_NAME}_${PAGE}_${JSON.stringify(filters)}`
     );
-
     const cachedData = cache.get(cacheKey);
-
     if (cachedData) {
       if (cachedData.results)
         await enrichWithLibraryTags("Manga", cachedData.results);
@@ -393,7 +303,6 @@ async function MangaSearch(provider, MANGA_NAME, PAGE = 1, filters = {}) {
         await enrichWithLibraryTags("Manga", cachedData.data);
       return cachedData;
     }
-
     const data = await provider.provider.searchManga(MANGA_NAME, PAGE, filters);
     if (data?.results) await enrichWithLibraryTags("Manga", data.results);
     if (data?.data) await enrichWithLibraryTags("Manga", data.data);
@@ -403,109 +312,77 @@ async function MangaSearch(provider, MANGA_NAME, PAGE = 1, filters = {}) {
     throw new Error(`No Manga found.. ${err}`);
   }
 }
-
-// Manga Info
 async function MangaInfo(provider, MANGA_ID) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `mangainfo${provider.provider_name}_${MANGA_ID}`,
+    `mangainfo${provider.provider_name}_${MANGA_ID}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     return cachedData;
   }
-
   let info = await provider.provider.fetchMangaInfo(MANGA_ID);
   cache.set(cacheKey, info, 60);
   return info;
 }
-
-// Manga
 async function fetchChapters(provider, MANGA_ID, page = 1) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `mangachapters${provider.provider_name}_${MANGA_ID}_${page}`,
+    `mangachapters${provider.provider_name}_${MANGA_ID}_${page}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     return cachedData;
   }
-
   let info = await provider.provider.fetchChapters(MANGA_ID, page);
   cache.set(cacheKey, info, 60);
   return info;
 }
-
-// Chapters Fetch
 async function MangaChapterFetch(provider, MangaChapterID) {
   if (!provider?.provider)
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
-
   const cacheKey = CreateHashKey(
-    `mangachapterfetch_${provider.provider_name}_${MangaChapterID}`,
+    `mangachapterfetch_${provider.provider_name}_${MangaChapterID}`
   );
-
   const cachedData = cache.get(cacheKey);
-
   if (cachedData) {
     return cachedData;
   }
-
   const data = await provider.provider.fetchChapterPages(MangaChapterID);
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-//====================================== Movies & TV Shows ================================
-// find popular / recent movies & series
 async function latestMovies(provider, filters = {}) {
   if (!provider?.provider) {
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
   }
-
   const cacheKey = CreateHashKey(
-    `latestmovies_${provider.provider_name}_${JSON.stringify(filters)}`,
+    `latestmovies_${provider.provider_name}_${JSON.stringify(filters)}`
   );
-
   const cachedData = cache.get(cacheKey);
   if (cachedData) {
     if (cachedData.results)
       await enrichWithLibraryTags("Movies", cachedData.results);
     return cachedData;
   }
-
-  const fetchFn =
-    provider.provider.latestMovies ||
-    provider.provider.fetchRecentEpisodes ||
-    provider.provider.fetchRecent ||
-    provider.provider.latest;
-
+  const fetchFn = provider.provider.latestMovies || provider.provider.fetchRecentEpisodes || provider.provider.fetchRecent || provider.provider.latest;
   if (typeof fetchFn !== "function") {
     throw new Error(
-      `Provider '${provider.provider_name}' does not implement a recent/latest releases function.`,
+      `Provider '${provider.provider_name}' does not implement a recent/latest releases function.`
     );
   }
-
   const rawData = await fetchFn.call(provider.provider, filters);
-  const data = Array.isArray(rawData)
-    ? { results: rawData }
-    : rawData || { results: [] };
+  const data = Array.isArray(rawData) ? { results: rawData } : rawData || { results: [] };
   if (!data.results && Array.isArray(data.data)) {
     data.results = data.data;
   }
@@ -513,89 +390,61 @@ async function latestMovies(provider, filters = {}) {
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-// search movies & series
 async function movieSearch(provider, query, filters = {}) {
   if (!provider?.provider) {
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
   }
-
   const cacheKey = CreateHashKey(
-    `moviesearch_${provider.provider_name}_${query}_${JSON.stringify(filters)}`,
+    `moviesearch_${provider.provider_name}_${query}_${JSON.stringify(filters)}`
   );
-
   const cachedData = cache.get(cacheKey);
   if (cachedData) {
     if (cachedData.results)
       await enrichWithLibraryTags("Movies", cachedData.results);
     return cachedData;
   }
-
-  const searchFn =
-    provider.provider.SearchMovies ||
-    provider.provider.searchMovies ||
-    provider.provider.SearchMedia ||
-    provider.provider.searchMedia ||
-    provider.provider.SearchAnime ||
-    provider.provider.search;
-
+  const searchFn = provider.provider.SearchMovies || provider.provider.searchMovies || provider.provider.SearchMedia || provider.provider.searchMedia || provider.provider.SearchAnime || provider.provider.search;
   if (typeof searchFn !== "function") {
     throw new Error(
-      `Provider '${provider.provider_name}' does not implement a search function.`,
+      `Provider '${provider.provider_name}' does not implement a search function.`
     );
   }
-
   const rawData = await searchFn.call(provider.provider, query, filters);
-  const results = Array.isArray(rawData)
-    ? rawData
-    : rawData?.results || rawData?.data || [];
+  const results = Array.isArray(rawData) ? rawData : rawData?.results || rawData?.data || [];
   if (results.length <= 0) {
     throw new Error(`No Movies or Series Found With This Name`);
   }
-
   await enrichWithLibraryTags("Movies", results);
   const normalized = {
     results,
     data: results,
     hasNextPage: rawData?.hasNextPage || false,
-    currentPage: rawData?.currentPage || 1,
+    currentPage: rawData?.currentPage || 1
   };
   cache.set(cacheKey, normalized, 60);
   return normalized;
 }
-
-// movie & series info
 async function movieInfo(provider, dir, movieId) {
   if (!provider?.provider) {
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
   }
-
   const cacheKey = CreateHashKey(
-    `movieinfo_${provider.provider_name}_${movieId}`,
+    `movieinfo_${provider.provider_name}_${movieId}`
   );
-
   const cachedData = cache.get(cacheKey);
   if (cachedData) {
     return cachedData;
   }
-
-  const infoFn =
-    provider.provider.MovieInfo ||
-    provider.provider.fetchMovieInfo ||
-    provider.provider.fetchMediaInfo ||
-    provider.provider.AnimeInfo ||
-    provider.provider.info;
-
+  const infoFn = provider.provider.MovieInfo || provider.provider.fetchMovieInfo || provider.provider.fetchMediaInfo || provider.provider.AnimeInfo || provider.provider.info;
   if (typeof infoFn !== "function") {
     throw new Error(
-      `Provider '${provider.provider_name}' does not implement an info function.`,
+      `Provider '${provider.provider_name}' does not implement an info function.`
     );
   }
-
   const data = await infoFn.call(provider.provider, movieId);
   if (data && (!Array.isArray(data.episodes) || data.episodes.length === 0)) {
     data.episodes = [
@@ -603,36 +452,27 @@ async function movieInfo(provider, dir, movieId) {
         id: data.id || movieId,
         episode: 1,
         number: 1,
-        title: data.title || "Full Movie",
-      },
+        title: data.title || "Full Movie"
+      }
     ];
   }
   cache.set(cacheKey, data, 60);
   return data;
 }
-
-// fetch movie stream sources
 async function fetchMovieSources(provider, episodeId, category = null) {
   if (!provider?.provider) {
     throw new Error(
-      "Missing Provider! ( try downloading from settings > marketplace )",
+      "Missing Provider! ( try downloading from settings > marketplace )"
     );
   }
-
-  const sourcesFn =
-    provider.provider.fetchEpisodeSources ||
-    provider.provider.fetchSources ||
-    provider.provider.fetchMovieSources ||
-    provider.provider.sources;
-
+  const sourcesFn = provider.provider.fetchEpisodeSources || provider.provider.fetchSources || provider.provider.fetchMovieSources || provider.provider.sources;
   if (typeof sourcesFn !== "function") {
     throw new Error(
-      `Provider '${provider.provider_name}' does not implement source fetching.`,
+      `Provider '${provider.provider_name}' does not implement source fetching.`
     );
   }
-
   const cacheKey = CreateHashKey(
-    `moviesources_${provider.provider_name}_${episodeId}_${category || "all"}`,
+    `moviesources_${provider.provider_name}_${episodeId}_${category || "all"}`
   );
   let sources = cache.get(cacheKey);
   if (!sources) {
@@ -641,146 +481,113 @@ async function fetchMovieSources(provider, episodeId, category = null) {
       cache.set(cacheKey, sources, 60);
     }
   }
-
   if (sources && global.setDynamicReferer) {
     const allSources = [
-      ...(Array.isArray(sources.sources) ? sources.sources : []),
-      ...(sources.sub?.sources || []),
-      ...(sources.dub?.sources || []),
+      ...Array.isArray(sources.sources) ? sources.sources : [],
+      ...sources.sub?.sources || [],
+      ...sources.dub?.sources || []
     ];
     const allSubtitles = [
-      ...(Array.isArray(sources.subtitles) ? sources.subtitles : []),
-      ...(sources.sub?.subtitles || []),
-      ...(sources.dub?.subtitles || []),
+      ...Array.isArray(sources.subtitles) ? sources.subtitles : [],
+      ...sources.sub?.subtitles || [],
+      ...sources.dub?.subtitles || []
     ];
     for (const item of [...allSources, ...allSubtitles]) {
       if (item?.url) {
         try {
           const cdnDomain = new URL(item.url).hostname;
-          const ref =
-            provider.provider.baseUrl ||
-            provider.provider.headers?.Referer ||
-            provider.provider.headers?.referer;
+          const ref = provider.provider.baseUrl || provider.provider.headers?.Referer || provider.provider.headers?.referer;
           if (ref) {
             global.setDynamicReferer(cdnDomain, ref);
           }
-        } catch (_) {}
+        } catch (_) {
+        }
       }
     }
   }
-
   return sources;
 }
-
-// Download Chapters
-async function DownloadChapters(
-  outputFile,
-  pages,
-  Title,
-  ChapterName,
-  MangaChapterID,
-  EpNum = null,
-  quality = null,
-) {
+async function DownloadChapters(outputFile, pages, Title, ChapterName, MangaChapterID, EpNum = null, quality = null) {
   try {
     const zip = new JSZip();
-
     const chpStr = EpNum || ChapterName || "";
     const qualStr = quality ? ` ( ${quality} )` : "";
-    const logger = new HLSLogger(
+    const logger2 = new HLSLogger(
       `Downloading CHP ${chpStr} ${Title}${qualStr}`,
       `${MangaChapterID}`,
       0,
-      false,
+      false
     );
-
-    logger.totalSegments = pages.length - 1;
-
+    logger2.totalSegments = pages.length - 1;
     const concurrencyLimit = 5;
     const results = new Array(pages.length);
     let activeIndex = 0;
     let currentDelay = 300;
-
     async function worker() {
       while (activeIndex < pages.length) {
         const i = activeIndex++;
         const imageUrl = pages[i]?.img;
         if (!imageUrl) {
-          logger.currentSegments++;
-          logger.logProgress();
+          logger2.currentSegments++;
+          logger2.logProgress();
           continue;
         }
-
         const jitter = Math.floor(Math.random() * 150) - 75;
-        const sleepTime = Math.max(200, Math.min(5000, currentDelay + jitter));
+        const sleepTime = Math.max(200, Math.min(5e3, currentDelay + jitter));
         await new Promise((resolve) => setTimeout(resolve, sleepTime));
-
         try {
           const imageBuffer = await downloadImage(imageUrl, (isFailure) => {
             if (isFailure) {
-              currentDelay = Math.min(5000, currentDelay + 500);
+              currentDelay = Math.min(5e3, currentDelay + 500);
             } else {
               currentDelay = Math.max(200, currentDelay - 20);
             }
           });
-
           let fileExtension = "jpg";
           if (!imageUrl.startsWith("file://") && !imageUrl.startsWith("/")) {
             fileExtension = imageUrl.split(".").pop().split(/\#|\?/)[0];
           } else {
-            fileExtension =
-              path
-                .extname(
-                  imageUrl.startsWith("file://") ? imageUrl.slice(7) : imageUrl,
-                )
-                .replace(".", "") || "jpg";
+            fileExtension = path.extname(
+              imageUrl.startsWith("file://") ? imageUrl.slice(7) : imageUrl
+            ).replace(".", "") || "jpg";
           }
-
           results[i] = {
             fileName: `${i + 1}.${fileExtension}`,
-            buffer: imageBuffer,
+            buffer: imageBuffer
           };
         } catch (error) {
           console.error(
             `Failed to download page ${i + 1} from ${imageUrl}:`,
-            error,
+            error
           );
           throw error;
         }
-
-        logger.currentSegments++;
-        logger.logProgress();
+        logger2.currentSegments++;
+        logger2.logProgress();
       }
     }
-
     const workers = [];
     for (let w = 0; w < Math.min(concurrencyLimit, pages.length); w++) {
       workers.push(worker());
     }
     await Promise.all(workers);
-
     for (let i = 0; i < pages.length; i++) {
       if (results[i]) {
         zip.file(results[i].fileName, results[i].buffer);
       }
     }
-
     const cbzBuffer = await zip.generateAsync({ type: "nodebuffer" });
     fs.writeFileSync(outputFile, cbzBuffer);
   } catch (error) {
     throw new Error(error);
   }
 }
-
-// Download Chapter Images Utils
 async function downloadImage(url, onAttemptResult = null) {
   if (url) {
     url = decodeURIComponent(url);
-
     if (url.includes("/api/image?url=")) {
       url = url.split("/api/image?url=")[1];
     }
-
     if (url.startsWith("file://") || url.startsWith("/")) {
       const filePath = url.startsWith("file://") ? url.slice(7) : url;
       return fs.readFileSync(filePath);
@@ -788,23 +595,17 @@ async function downloadImage(url, onAttemptResult = null) {
       const base64Data = url.split("base64,")[1];
       return Buffer.from(base64Data, "base64");
     }
-
     const resolvedHeaders = getHeaders(url);
     const options = {
       responseType: "arraybuffer",
       headers: {
-        ...(resolvedHeaders.Referer
-          ? { Referer: resolvedHeaders.Referer }
-          : {}),
-        ...(resolvedHeaders["User-Agent"]
-          ? { "User-Agent": resolvedHeaders["User-Agent"] }
-          : {}),
-        ...(resolvedHeaders.Cookie ? { Cookie: resolvedHeaders.Cookie } : {}),
-      },
+        ...resolvedHeaders.Referer ? { Referer: resolvedHeaders.Referer } : {},
+        ...resolvedHeaders["User-Agent"] ? { "User-Agent": resolvedHeaders["User-Agent"] } : {},
+        ...resolvedHeaders.Cookie ? { Cookie: resolvedHeaders.Cookie } : {}
+      }
     };
     const retries = 3;
-    let delay = 1000;
-
+    let delay = 1e3;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         let response;
@@ -812,17 +613,13 @@ async function downloadImage(url, onAttemptResult = null) {
           response = await global.axios.get(url, options);
           if (onAttemptResult) onAttemptResult(false);
         } catch (err) {
-          if (
-            err.response &&
-            (err.response.status === 403 || err.response.status === 503) &&
-            global.cloudflarebypass
-          ) {
-            await global.cloudflarebypass(url, true).catch(() => {});
-
+          if (err.response && (err.response.status === 403 || err.response.status === 503) && global.cloudflarebypass) {
+            await global.cloudflarebypass(url, true).catch(() => {
+            });
             const freshHeaders = getHeaders(url);
             options.headers = {
               ...options.headers,
-              ...(freshHeaders.Cookie ? { Cookie: freshHeaders.Cookie } : {}),
+              ...freshHeaders.Cookie ? { Cookie: freshHeaders.Cookie } : {}
             };
             response = await global.axios.get(url, options);
             if (onAttemptResult) onAttemptResult(false);
@@ -835,15 +632,15 @@ async function downloadImage(url, onAttemptResult = null) {
         if (onAttemptResult) onAttemptResult(true);
         if (attempt === retries) {
           logger.error(
-            `Failed to download image after ${retries} attempts: ${url}. Error: ${err.message}`,
+            `Failed to download image after ${retries} attempts: ${url}. Error: ${err.message}`
           );
           return Buffer.from(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-            "base64",
+            "base64"
           );
         }
         logger.warn(
-          `Attempt ${attempt} to download ${url} failed: ${err.message}. Retrying in ${delay}ms...`,
+          `Attempt ${attempt} to download ${url} failed: ${err.message}. Retrying in ${delay}ms...`
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2;
@@ -852,24 +649,16 @@ async function downloadImage(url, onAttemptResult = null) {
   }
   return null;
 }
-
 function CreateHashKey(text) {
   return crypto.createHash("md5").update(text).digest("hex");
 }
-
 function invalidateCache(type, providerName, id) {
   if (!providerName || !id) return;
   const norm = String(type || "").toLowerCase();
-  const key =
-    norm === "anime"
-      ? `animeinfo_${providerName}_${id}`
-      : norm === "movies"
-        ? `movieinfo_${providerName}_${id}`
-        : `mangainfo${providerName}_${id}`;
+  const key = norm === "anime" ? `animeinfo_${providerName}_${id}` : norm === "movies" ? `movieinfo_${providerName}_${id}` : `mangainfo${providerName}_${id}`;
   const cacheKey = CreateHashKey(key);
   cache.del(cacheKey);
 }
-
 async function getProviderOrThrow(type, name) {
   const pObj = await providerFetch(type, name);
   if (!pObj?.provider) {
@@ -877,37 +666,25 @@ async function getProviderOrThrow(type, name) {
   }
   return pObj;
 }
-
 async function migrateLegacyFolderIfNeeded(type, dbRecord, baseDir) {
-  if (!dbRecord || (!dbRecord.title && !dbRecord.folder_name)) return;
-  baseDir =
-    typeof baseDir === "string" && baseDir.trim()
-      ? baseDir
-      : getDownloadsFolder();
-
+  if (!dbRecord || !dbRecord.title && !dbRecord.folder_name) return;
+  baseDir = typeof baseDir === "string" && baseDir.trim() ? baseDir : getDownloadsFolder();
   const title = dbRecord.title || dbRecord.folder_name;
   const targetFolderName = dbRecord.folder_name || sanitizeFolderName(title);
-
-  // 1. If folder_name is set and exists on disk with files, keep it!
   if (dbRecord.folder_name) {
     let currentPath = path.join(baseDir, type, dbRecord.folder_name);
-    if (
-      !hasLocalMediaFiles(currentPath, type) &&
-      hasLocalMediaFiles(path.join(baseDir, dbRecord.folder_name), type)
-    ) {
+    if (!hasLocalMediaFiles(currentPath, type) && hasLocalMediaFiles(path.join(baseDir, dbRecord.folder_name), type)) {
       currentPath = path.join(baseDir, dbRecord.folder_name);
     }
     if (hasLocalMediaFiles(currentPath, type)) {
       return dbRecord.folder_name;
     }
   }
-
-  // 2. If another record with the same MalID already has a folder on disk with files, share it!
   if (dbRecord.malid && dbRecord.id) {
     try {
       const existingRows = await queryAll(
         `SELECT id, folder_name FROM ${type} WHERE MalID = ? AND folder_name IS NOT NULL AND folder_name != ''`,
-        [String(dbRecord.malid)],
+        [String(dbRecord.malid)]
       );
       for (const row of existingRows || []) {
         if (row.folder_name) {
@@ -917,19 +694,19 @@ async function migrateLegacyFolderIfNeeded(type, dbRecord, baseDir) {
               try {
                 await run(`UPDATE ${type} SET folder_name = ? WHERE id = ?`, [
                   row.folder_name,
-                  dbRecord.id,
+                  dbRecord.id
                 ]);
                 dbRecord.folder_name = row.folder_name;
-              } catch (_) {}
+              } catch (_) {
+              }
             }
             return row.folder_name;
           }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
-  // 3. Check if clean sanitized title folder exists on disk with files
   const newFolderName = sanitizeFolderName(title);
   const newDir = path.join(baseDir, type, newFolderName);
   if (hasLocalMediaFiles(newDir, type)) {
@@ -937,23 +714,18 @@ async function migrateLegacyFolderIfNeeded(type, dbRecord, baseDir) {
       try {
         await run(`UPDATE ${type} SET folder_name = ? WHERE id = ?`, [
           newFolderName,
-          dbRecord.id,
+          dbRecord.id
         ]);
         dbRecord.folder_name = newFolderName;
-      } catch (_) {}
+      } catch (_) {
+      }
     }
     return newFolderName;
   }
-
   return targetFolderName;
 }
-
 async function resolveDownloadFolder(type, id, subdub, baseDir) {
-  baseDir =
-    typeof baseDir === "string" && baseDir.trim()
-      ? baseDir
-      : getDownloadsFolder();
-
+  baseDir = typeof baseDir === "string" && baseDir.trim() ? baseDir : getDownloadsFolder();
   let typeDir = path.join(baseDir, type, id || "");
   if (type === "Movies" && (!id || !fs.existsSync(typeDir))) {
     const msDir = path.join(baseDir, "MoviesSeries", id || "");
@@ -962,67 +734,51 @@ async function resolveDownloadFolder(type, id, subdub, baseDir) {
   if (id && fs.existsSync(typeDir)) return typeDir;
   if (id && fs.existsSync(path.join(baseDir, id || "")))
     return path.join(baseDir, id || "");
-
   let record = null;
-
   try {
     record = await queryOne(
       `SELECT * FROM ${type} WHERE id = ? OR folder_name = ? OR LOWER(id) = LOWER(?) OR LOWER(folder_name) = LOWER(?) OR LOWER(REPLACE(title, ' ', '-')) = LOWER(?) LIMIT 1`,
-      [id, id, id, id, id],
+      [id, id, id, id, id]
     );
-  } catch (_) {}
-
+  } catch (_) {
+  }
   if (!record && id) {
     try {
       const qRecord = await queryOne(
         `SELECT * FROM DownloadQueue WHERE id = ? OR epid LIKE ? LIMIT 1`,
-        [id, `%${id}%`],
+        [id, `%${id}%`]
       );
       if (qRecord && qRecord.Title) {
         record = {
           title: qRecord.Title,
-          folder_name: sanitizeFolderName(qRecord.Title),
+          folder_name: sanitizeFolderName(qRecord.Title)
         };
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
   if (!record && id) {
     try {
       const isMovies = type === "Movies";
-      const histTable = isMovies
-        ? "SeriesMovieWatchHistory"
-        : type === "Anime"
-          ? "WatchHistory"
-          : "ReadHistory";
-      const colId = isMovies
-        ? "movie_id"
-        : type === "Anime"
-          ? "anime_id"
-          : "manga_id";
-      const colTitle = isMovies
-        ? "title"
-        : type === "Anime"
-          ? "anime_title"
-          : "manga_title";
+      const histTable = isMovies ? "SeriesMovieWatchHistory" : type === "Anime" ? "WatchHistory" : "ReadHistory";
+      const colId = isMovies ? "movie_id" : type === "Anime" ? "anime_id" : "manga_id";
+      const colTitle = isMovies ? "title" : type === "Anime" ? "anime_title" : "manga_title";
       const hRecord = await queryOne(
         `SELECT * FROM ${histTable} WHERE ${colId} = ? ORDER BY id DESC LIMIT 1`,
-        [id],
+        [id]
       );
       if (hRecord && hRecord[colTitle]) {
         record = {
           title: hRecord[colTitle],
-          folder_name: sanitizeFolderName(hRecord[colTitle]),
+          folder_name: sanitizeFolderName(hRecord[colTitle])
         };
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
   if (record) {
     await migrateLegacyFolderIfNeeded(type, record, baseDir);
-    const folderName =
-      record.folder_name ||
-      (record.title ? sanitizeFolderName(record.title) : id);
+    const folderName = record.folder_name || (record.title ? sanitizeFolderName(record.title) : id);
     let resolvedPath = path.join(baseDir, type, folderName);
     if (type === "Movies" && !fs.existsSync(resolvedPath)) {
       const msPath = path.join(baseDir, "MoviesSeries", folderName);
@@ -1033,7 +789,6 @@ async function resolveDownloadFolder(type, id, subdub, baseDir) {
       return path.join(baseDir, folderName);
     }
   }
-
   if (id) {
     const sanitizedId = sanitizeFolderName(id);
     const candidates = [
@@ -1041,16 +796,14 @@ async function resolveDownloadFolder(type, id, subdub, baseDir) {
       sanitizedId,
       String(id).replace(/[^a-zA-Z0-9]/g, "_"),
       String(id).replace(/-/g, " "),
-      sanitizeFolderName(String(id).replace(/-/g, " ")),
+      sanitizeFolderName(String(id).replace(/-/g, " "))
     ].filter(Boolean);
-
     for (const cand of candidates) {
       const candPath = path.join(baseDir, type, cand);
       if (fs.existsSync(candPath)) return candPath;
       const directCand = path.join(baseDir, cand);
       if (fs.existsSync(directCand)) return directCand;
     }
-
     try {
       const dirsToSearch = [];
       const parentDir = path.join(baseDir, type);
@@ -1058,40 +811,25 @@ async function resolveDownloadFolder(type, id, subdub, baseDir) {
       if (fs.existsSync(baseDir) && !dirsToSearch.includes(baseDir)) {
         dirsToSearch.push(baseDir);
       }
-
       for (const pDir of dirsToSearch) {
         const dirs = await fs.promises.readdir(pDir, {
-          withFileTypes: true,
+          withFileTypes: true
         });
         const cleanId = cleanAlphanumeric(id);
         for (const d of dirs) {
-          // Never fuzzy-match a media-server show folder (it holds every
-          // season; deleting one entry must not take the whole show)
-          if (
-            d.isDirectory() &&
-            d.name !== "Anime" &&
-            d.name !== "Manga" &&
-            !fs
-              .readdirSync(path.join(pDir, d.name))
-              .some((n) => SEASON_FOLDER_RE.test(n))
-          ) {
+          if (d.isDirectory() && d.name !== "Anime" && d.name !== "Manga" && !fs.readdirSync(path.join(pDir, d.name)).some((n) => SEASON_FOLDER_RE.test(n))) {
             const cleanDirName = cleanAlphanumeric(d.name);
-            if (
-              cleanId.length > 5 &&
-              (cleanDirName.includes(cleanId) || cleanId.includes(cleanDirName))
-            ) {
+            if (cleanId.length > 5 && (cleanDirName.includes(cleanId) || cleanId.includes(cleanDirName))) {
               return path.join(pDir, d.name);
             }
           }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    }
   }
-
   if (record) {
-    const folderName =
-      record.folder_name ||
-      (record.title ? sanitizeFolderName(record.title) : id);
+    const folderName = record.folder_name || (record.title ? sanitizeFolderName(record.title) : id);
     if (fs.existsSync(path.join(baseDir, folderName))) {
       return path.join(baseDir, folderName);
     }
@@ -1103,72 +841,52 @@ async function resolveDownloadFolder(type, id, subdub, baseDir) {
     }
     return path.join(baseDir, type, folderName);
   }
-
   if (!fs.existsSync(path.join(baseDir, type)) && id) {
     return path.join(baseDir, id);
   }
-
   return typeDir;
 }
-
 async function processServer(provider, server) {
   if (!provider?.provider?.processServer) {
     return server;
   }
-
-  const uniqueId =
-    server.url ||
-    server.linkId ||
-    server.id ||
-    server.rawServer?.url ||
-    server.rawServer?.linkId ||
-    server.rawServer?.id;
-
+  const uniqueId = server.url || server.linkId || server.id || server.rawServer?.url || server.rawServer?.linkId || server.rawServer?.id;
   const providerName = provider?.provider_name || provider?.name || "unknown";
-  const cacheKey = uniqueId
-    ? CreateHashKey(`processServer_${providerName}_${uniqueId}`)
-    : null;
-
+  const cacheKey = uniqueId ? CreateHashKey(`processServer_${providerName}_${uniqueId}`) : null;
   if (cacheKey) {
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
-      if (
-        cachedData.url &&
-        global.setDynamicReferer &&
-        cachedData.headers?.Referer
-      ) {
+      if (cachedData.url && global.setDynamicReferer && cachedData.headers?.Referer) {
         try {
           const cdnDomain = new URL(cachedData.url).hostname;
           global.setDynamicReferer(cdnDomain, cachedData.headers.Referer);
           global.setFallbackReferer(cachedData.headers.Referer);
-        } catch (e) {}
+        } catch (e) {
+        }
       }
       return cachedData;
     }
   }
-
   const resolvePromise = provider.provider.processServer(
-    server.rawServer || server,
+    server.rawServer || server
   );
-  const timeoutMs = global.IsBypassingCloudflare ? 35000 : 25000;
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(
-      () =>
-        reject(
-          new Error(
-            `Server resolution timeout (${Math.round(timeoutMs / 1000)}s)`,
-          ),
-        ),
-      timeoutMs,
-    ),
+  const timeoutMs = global.IsBypassingCloudflare ? 35e3 : 25e3;
+  const timeoutPromise = new Promise(
+    (_, reject) => setTimeout(
+      () => reject(
+        new Error(
+          `Server resolution timeout (${Math.round(timeoutMs / 1e3)}s)`
+        )
+      ),
+      timeoutMs
+    )
   );
-
   let resolved;
   try {
     resolved = await Promise.race([resolvePromise, timeoutPromise]);
   } catch (e) {
     logger.warn(
-      `[processServer] Timeout or error resolving server ${server.name || server.quality}: ${e.message}`,
+      `[processServer] Timeout or error resolving server ${server.name || server.quality}: ${e.message}`
     );
     return null;
   }
@@ -1179,27 +897,27 @@ async function processServer(provider, server) {
         const cdnDomain = new URL(resolved.url).hostname;
         global.setDynamicReferer(cdnDomain, ref);
         global.setFallbackReferer(ref);
-      } catch (e) {}
-
+      } catch (e) {
+      }
       if (Array.isArray(resolved.subtitles)) {
         for (const sub of resolved.subtitles) {
           if (sub?.url) {
             try {
               const subDomain = new URL(sub.url).hostname;
               global.setDynamicReferer(subDomain, ref);
-            } catch (e) {}
+            } catch (e) {
+            }
           }
         }
       }
     }
-
     const isAlive = await verifyStreamReachability(
       resolved.url,
-      resolved.headers || {},
+      resolved.headers || {}
     );
     if (!isAlive.ok) {
       logger.warn(
-        `[processServer] Server "${server.name || server.quality}" stream verification failed: ${isAlive.message}`,
+        `[processServer] Server "${server.name || server.quality}" stream verification failed: ${isAlive.message}`
       );
       return null;
     }
@@ -1209,7 +927,6 @@ async function processServer(provider, server) {
   }
   return resolved;
 }
-
 module.exports = {
   latestAnime,
   animesearch,
@@ -1230,5 +947,5 @@ module.exports = {
   getProviderOrThrow,
   resolveDownloadFolder,
   migrateLegacyFolderIfNeeded,
-  processServer,
+  processServer
 };

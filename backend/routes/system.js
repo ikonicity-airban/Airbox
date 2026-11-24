@@ -4,10 +4,7 @@ const { getQueue, updateQueue, isQueuePaused } = require("../utils/queue");
 const ImageCacheManager = require("../utils/ImageCacheManager");
 const { getCurrentAppVersion } = require("../utils/constants");
 const { getChangelog } = require("../utils/changelog");
-
 const router = express.Router();
-
-// Get application logs
 router.get("/api/logs", async (req, res) => {
   try {
     const logs = await getLogs();
@@ -16,8 +13,6 @@ router.get("/api/logs", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Clear application logs
 router.delete("/api/logs", async (req, res) => {
   try {
     await clearLogs();
@@ -26,14 +21,10 @@ router.delete("/api/logs", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Get app version
 router.get("/api/version", (req, res) => {
   const version = getCurrentAppVersion();
   res.json({ ok: true, result: version, version });
 });
-
-// Get application changelog / release notes
 router.get("/api/changelog", (req, res) => {
   try {
     const changelog = getChangelog();
@@ -46,8 +37,6 @@ router.get("/api/changelog", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Handles Download Progress & Sends To FrontEnd
 router.post("/api/logger", async (req, res) => {
   const {
     caption,
@@ -57,30 +46,21 @@ router.post("/api/logger", async (req, res) => {
     concurrency,
     lastTestedConcurrency,
     downloadSpeed,
-    eta,
+    eta
   } = req.body;
   try {
-    const currentQueue = (await getQueue()) ?? [];
+    const currentQueue = await getQueue() ?? [];
     const exists = currentQueue.some((item) => item.epid === epid);
     if (!exists) {
       return res.status(200).json({ message: "Task no longer in queue" });
     }
-
-    let queue =
-      (await updateQueue(epid, totalSegments, currentSegments, caption)) ?? [];
-
+    let queue = await updateQueue(epid, totalSegments, currentSegments, caption) ?? [];
     let activeItem = queue.find(
-      (item) =>
-        item.totalSegments > 0 ||
-        (item.caption && item.caption.includes("Downloading")),
+      (item) => item.totalSegments > 0 || item.caption && item.caption.includes("Downloading")
     );
     let activeTasksItems = activeItem ? [activeItem] : [];
-    let upcomingQueue = activeItem
-      ? queue.filter((item) => item?.epid !== activeItem.epid)
-      : queue;
-
+    let upcomingQueue = activeItem ? queue.filter((item) => item?.epid !== activeItem.epid) : queue;
     const activeTaskItem = currentQueue.find((item) => item.epid === epid);
-
     global.sendToRenderer("download-logger", {
       caption,
       totalSegments,
@@ -91,12 +71,7 @@ router.post("/api/logger", async (req, res) => {
       EpNum: activeTaskItem?.EpNum,
       Title: activeTaskItem?.Title,
       Type: activeTaskItem?.Type,
-      season:
-        activeTaskItem?.season !== undefined && activeTaskItem?.season !== null
-          ? activeTaskItem.season
-          : activeTaskItem?.config?.season !== undefined
-            ? activeTaskItem.config.season
-            : null,
+      season: activeTaskItem?.season !== void 0 && activeTaskItem?.season !== null ? activeTaskItem.season : activeTaskItem?.config?.season !== void 0 ? activeTaskItem.config.season : null,
       concurrency,
       lastTestedConcurrency,
       downloadSpeed,
@@ -112,31 +87,17 @@ router.post("/api/logger", async (req, res) => {
         EpNum: task.EpNum,
         Title: task.Title,
         Type: task.Type,
-        season:
-          task.season !== undefined && task.season !== null
-            ? task.season
-            : task.config?.season !== undefined
-              ? task.config.season
-              : null,
+        season: task.season !== void 0 && task.season !== null ? task.season : task.config?.season !== void 0 ? task.config.season : null,
         concurrency: task.epid === epid ? concurrency : task.concurrency,
-        lastTestedConcurrency:
-          task.epid === epid
-            ? lastTestedConcurrency
-            : task.lastTestedConcurrency,
+        lastTestedConcurrency: task.epid === epid ? lastTestedConcurrency : task.lastTestedConcurrency,
         downloadSpeed: task.epid === epid ? downloadSpeed : task.downloadSpeed,
-        eta: task.epid === epid ? eta : task.eta,
+        eta: task.epid === epid ? eta : task.eta
       })),
       queue: upcomingQueue.map((item) => ({
         ...item,
-        season:
-          item.season !== undefined && item.season !== null
-            ? item.season
-            : item.config?.season !== undefined
-              ? item.config.season
-              : null,
-      })),
+        season: item.season !== void 0 && item.season !== null ? item.season : item.config?.season !== void 0 ? item.config.season : null
+      }))
     });
-
     res.status(200).json({ message: "Download progress received" });
   } catch (err) {
     logger.error(`Error Logging Download Segment`);
@@ -145,8 +106,6 @@ router.post("/api/logger", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-// Get image cache stats
 router.get("/api/cache/stats", (req, res) => {
   try {
     const stats = ImageCacheManager.getCacheStats();
@@ -155,8 +114,6 @@ router.get("/api/cache/stats", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Clear image cache
 router.post("/api/cache/clear", async (req, res) => {
   try {
     const result = await ImageCacheManager.clearCache();
@@ -165,23 +122,16 @@ router.post("/api/cache/clear", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Marketplace and Custom Repositories API
 router.get("/api/marketplace", async (req, res) => {
   try {
     const { fetchAggregatedMarketplace } = require("../utils/settings");
-    const activeType =
-      req.query.type === "Manga"
-        ? "Manga"
-        : req.query.type === "Movies" || req.query.type === "movies-tvshows"
-          ? "Movies"
-          : "Anime";
+    const activeType = req.query.type === "Manga" ? "Manga" : req.query.type === "Movies" || req.query.type === "movies-tvshows" ? "Movies" : "Anime";
     const data = await fetchAggregatedMarketplace(activeType);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.get("/api/marketplace/repos", (req, res) => {
   try {
     const { getExtensionRepos } = require("../utils/settings");
@@ -190,7 +140,6 @@ router.get("/api/marketplace/repos", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.post("/api/marketplace/repos", async (req, res) => {
   try {
     const { addExtensionRepo } = require("../utils/settings");
@@ -201,7 +150,6 @@ router.post("/api/marketplace/repos", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
 router.post("/api/marketplace/repos/restore-default", async (req, res) => {
   try {
     const { restoreDefaultExtensionRepo } = require("../utils/settings");
@@ -211,19 +159,16 @@ router.post("/api/marketplace/repos/restore-default", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.delete("/api/marketplace/repos", async (req, res) => {
   try {
     const { removeExtensionRepo } = require("../utils/settings");
-    const target =
-      req.query.id || req.query.url || req.body?.id || req.body?.url;
+    const target = req.query.id || req.query.url || req.body?.id || req.body?.url;
     const result = await removeExtensionRepo(target);
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
-
 router.delete("/api/marketplace/repos/:owner/:repo", async (req, res) => {
   try {
     const { removeExtensionRepo } = require("../utils/settings");
@@ -234,24 +179,16 @@ router.delete("/api/marketplace/repos/:owner/:repo", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
 router.delete("/api/marketplace/repos/:identifier", async (req, res) => {
   try {
     const { removeExtensionRepo } = require("../utils/settings");
-    const target =
-      req.params.identifier ||
-      req.query.id ||
-      req.query.url ||
-      req.body?.id ||
-      req.body?.url;
+    const target = req.params.identifier || req.query.id || req.query.url || req.body?.id || req.body?.url;
     const result = await removeExtensionRepo(target);
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
-
-// Extensions API (Add / Delete / Reload)
 router.post("/api/extensions", async (req, res) => {
   try {
     const { HandleExtensions } = require("../utils/settings");
@@ -262,5 +199,4 @@ router.post("/api/extensions", async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-
 module.exports = router;

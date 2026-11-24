@@ -1,8 +1,8 @@
 {
-  "name": "iconmedia",
+  "name": "airbox",
   "version": "1.0.0",
   "private": true,
-  "description": "Iconmedia - Stream & Download Movies, Series & Anime with full season organization",
+  "description": "Airbox - Modern open source streaming and download studio for movies, series, anime, and manga",
   "scripts": {
     "dev:gui": "npm run dev --prefix gui",
     "dev:desktop": "cd electron && npm start",
@@ -16,8 +16,14 @@
     "build:android": "npm run sync:android && cd capacitor/android && ./gradlew assembleRelease",
     "lint": "npm run lint --prefix gui",
     "lint:fix": "npm run lint --prefix gui -- --fix",
-    "test": "node --test backend/utils/constants.test.js",
-    "test:watch": "node --test --watch backend/utils/constants.test.js",
+    "build:backend": "cd electron && npm run build:ts",
+    "typecheck": "npm run typecheck --prefix gui",
+    "test": "node --test backend/utils/constants.test.ts && node --test gui/src/utils/common.test.ts && node --test gui/src/utils/searchHistory.test.ts && node --test backend/utils/personMetadata.test.ts",
+    "test:watch": "node --test --watch backend/utils/constants.test.ts",
     "release": "bash release.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ikonicity-airban/Airbox.git"
   }
 }

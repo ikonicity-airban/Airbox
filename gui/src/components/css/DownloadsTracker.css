@@ -67,13 +67,13 @@
 }
 
 .btn-pause-toggle.resume {
-  background-color: rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #f59e0b;
+  background-color: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--text-main);
 }
 
 .btn-pause-toggle.resume:hover {
-  background-color: rgba(245, 158, 11, 0.25);
+  border-color: var(--accent);
 }
 
 .btn-refresh {
@@ -106,8 +106,8 @@
 }
 
 .btn-clear-all {
-  background-color: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
   color: var(--danger);
   border-radius: 8px;
   padding: 7px 14px;
@@ -125,7 +125,7 @@
 }
 
 .btn-clear-all:hover {
-  background-color: rgba(239, 68, 68, 0.2);
+  background-color: var(--bg-tertiary);
   border-color: var(--danger);
 }
 
@@ -209,53 +209,17 @@
   flex-wrap: wrap;
 }
 
-.badge-concurrent {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-}
-
-.badge-speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-}
-
-.badge-eta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-}
-
+.badge-concurrent,
+.badge-speed,
+.badge-eta,
 .badge-warning {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--bg-tertiary);
+  color: var(--text-main);
+  border: 1px solid var(--border);
   padding: 2px 8px;
   border-radius: 6px;
   font-weight: 600;
