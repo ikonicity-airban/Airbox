@@ -268,7 +268,7 @@ function createPolyfill(): SharedStateAPI & Record<string, any> {
     marketplace: (AnimeManga: string) => {
       invoke("marketplace", AnimeManga).catch(() => {});
     },
-    getMarketplace: async (activeType: string = "Anime") => {
+    getMarketplace: async (activeType: string = "Movies") => {
       const res = await fetch(
         `/api/marketplace?type=${encodeURIComponent(activeType)}`,
       );
@@ -344,6 +344,7 @@ function createPolyfill(): SharedStateAPI & Record<string, any> {
 
 if (typeof window !== "undefined" && !window.sharedStateAPI) {
   window.sharedStateAPI = createPolyfill();
+  (window as any).__AIRBOX_MOBILE__ = true;
   (window as any).__STRAWVERSE_MOBILE__ = true;
   setTimeout(() => {
     ensureEventSource();
@@ -354,4 +355,6 @@ if (typeof window !== "undefined" && !window.sharedStateAPI) {
 }
 
 export const isMobileApp = (): boolean =>
-  typeof window !== "undefined" && (window as any).__STRAWVERSE_MOBILE__ === true;
+  typeof window !== "undefined" &&
+  ((window as any).__AIRBOX_MOBILE__ === true ||
+    (window as any).__STRAWVERSE_MOBILE__ === true);

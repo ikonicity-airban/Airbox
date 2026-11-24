@@ -98,7 +98,7 @@
 
   <!-- Main Title with Glow -->
   <g filter="url(#glow)">
-    <text x="600" y="105" text-anchor="middle" fill="url(#text-grad)" class="title">StrawVerse</text>
+    <text x="600" y="105" text-anchor="middle" fill="url(#text-grad)" class="title">Airbox</text>
   </g>
 
   <!-- Subtitle -->

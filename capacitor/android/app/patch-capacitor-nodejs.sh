@@ -56,10 +56,10 @@ sed -i '/nodeEnv.put("DATADIR", dataPath);/ {
     N
     c\
             nodeEnv.put("DATADIR", dataPath);\
-            \/\/ ─── Custom Strawverse Directory Resolution ───\
-            java.io.File appSpecificRoot = new java.io.File(context.getExternalFilesDir(null), "Strawverse");\
+            \/\/ ─── Custom Airbox Directory Resolution ───\
+            java.io.File appSpecificRoot = new java.io.File(context.getExternalFilesDir(null), "Airbox");\
             java.io.File extStorage = android.os.Environment.getExternalStorageDirectory();\
-            java.io.File publicRoot = new java.io.File(extStorage, "Strawverse");\
+            java.io.File publicRoot = new java.io.File(extStorage, "Airbox");\
             boolean usePublic = false;\
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {\
                 if (android.os.Environment.isExternalStorageManager()) {\
@@ -88,12 +88,15 @@ sed -i '/nodeEnv.put("DATADIR", dataPath);/ {
             new java.io.File(publicRoot, "data").mkdirs();\
             new java.io.File(publicRoot, "Anime").mkdirs();\
             new java.io.File(publicRoot, "Manga").mkdirs();\
+            new java.io.File(publicRoot, "Movies").mkdirs();\
             java.io.File scrapperRoot = new java.io.File(publicRoot, "scrapper");\
             new java.io.File(scrapperRoot, "Anime").mkdirs();\
             new java.io.File(scrapperRoot, "Manga").mkdirs();\
+            new java.io.File(scrapperRoot, "Movies").mkdirs();\
             new java.io.File(scrapperRoot, "ico").mkdirs();\
             \
             nodeEnv.put("NODEJS_MOBILE_DATA_DIR", publicRoot.getAbsolutePath());\
+            nodeEnv.put("AIRBOX_PUBLIC_ROOT", publicRoot.getAbsolutePath());\
             nodeEnv.put("STRAWVERSE_PUBLIC_ROOT", publicRoot.getAbsolutePath());\
             nodeEnv.put("INTERNAL_DATA_DIR", dataPath);\
             nodeEnv.put("NATIVE_LIB_DIR", context.getApplicationInfo().nativeLibraryDir);\

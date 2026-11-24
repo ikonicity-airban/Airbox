@@ -15,7 +15,7 @@ ELECTRON_PKG="$ELECTRON_DIR/package.json"
 CAPACITOR_PKG="$CAPACITOR_DIR/package.json"
 ROOT_PKG="$SCRIPT_DIR/package.json"
 DIST_DIR="$ELECTRON_DIR/dist"
-REPO="TheYogMehta/StrawVerse"
+REPO="ikonicity-airban/Airbox"
 DISCORD_LINK="https://discord.gg/PzfUBgQ2gt"
 
 # ── Colors ───────────────────────────────────────────────
@@ -147,7 +147,7 @@ ok "Android build complete"
 # Copy signed release APK to DIST_DIR with clean versioned name
 ANDROID_APK="$CAPACITOR_DIR/android/app/build/outputs/apk/release/app-release.apk"
 if [ -f "$ANDROID_APK" ]; then
-  NAMED_APK="$DIST_DIR/StrawVerse-${VERSION}.apk"
+  NAMED_APK="$DIST_DIR/Airbox-${VERSION}.apk"
   cp "$ANDROID_APK" "$NAMED_APK"
   ok "Android APK copied to dist: $(basename "$NAMED_APK") ($(du -h "$NAMED_APK" | cut -f1))"
 else
@@ -188,7 +188,7 @@ done
 
 gh release create "$TAG" \
   --repo "$REPO" \
-  --title "StrawVerse ${TAG}" \
+  --title "Airbox ${TAG}" \
   --notes "$RELEASE_BODY" \
   "${ASSET_ARGS[@]}"
 

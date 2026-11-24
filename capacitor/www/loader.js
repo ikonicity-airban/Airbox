@@ -47,7 +47,7 @@ async function main() {
   try {
     if (!NodeJS) {
       showError(
-        "Native bridge unavailable. This page must run inside the StrawVerse Android app.",
+        "Native bridge unavailable. This page must run inside the Airbox Android app.",
       );
       return;
     }

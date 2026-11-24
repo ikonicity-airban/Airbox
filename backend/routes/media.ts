@@ -5421,7 +5421,7 @@ router.get("/api/image", async (req, res) => {
             {
               headers: {
                 "Content-Type": "application/json",
-                "User-Agent": "StrawVerse-Client",
+                "User-Agent": "Airbox-Client",
               },
               timeout: 5000,
             },

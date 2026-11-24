@@ -166,6 +166,8 @@ function getLogs() {
       let crashLogs = "";
       const crashCandidates = [
         CrashLogFilePath,
+        path.join(os.homedir(), "Airbox", "data", "crash.log"),
+        "/sdcard/Airbox/data/crash.log",
         path.join(os.homedir(), "Strawverse", "data", "crash.log"),
         "/sdcard/Strawverse/data/crash.log"
       ];
@@ -233,13 +235,25 @@ function clearLogs() {
       }
       const publicCrash = path.join(
         os.homedir(),
-        "Strawverse",
+        "Airbox",
         "data",
         "crash.log"
       );
       if (fs.existsSync(publicCrash)) {
         try {
           fs.unlinkSync(publicCrash);
+        } catch (_) {
+        }
+      }
+      const legacyCrash = path.join(
+        os.homedir(),
+        "Strawverse",
+        "data",
+        "crash.log"
+      );
+      if (fs.existsSync(legacyCrash)) {
+        try {
+          fs.unlinkSync(legacyCrash);
         } catch (_) {
         }
       }
@@ -252,7 +266,7 @@ function clearLogs() {
 const MAX_LOG_FILES_HARD_LIMIT = 10;
 const MAX_LOG_TOTAL_BYTES = 500 * 1024 * 1024;
 function getExternalLogDir() {
-  const dir = path.join(os.homedir(), "StrawVerse", "logs");
+  const dir = path.join(os.homedir(), "Airbox", "logs");
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (_) {
@@ -262,7 +276,7 @@ function getExternalLogDir() {
 function listExternalLogFiles(dir) {
   let files = [];
   try {
-    files = fs.readdirSync(dir).filter((n) => /^strawverse-.*\.log$/i.test(n)).map((n) => {
+    files = fs.readdirSync(dir).filter((n) => /^(airbox|strawverse)-.*\.log$/i.test(n)).map((n) => {
       const p = path.join(dir, n);
       const st = fs.statSync(p);
       return { path: p, name: n, mtimeMs: st.mtimeMs, size: st.size };
@@ -308,10 +322,10 @@ function buildSessionLogPath(dir) {
   const d = /* @__PURE__ */ new Date();
   const pad = (n) => String(n).padStart(2, "0");
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  let p = path.join(dir, `strawverse-${stamp}.log`);
+  let p = path.join(dir, `airbox-${stamp}.log`);
   let i = 1;
   while (fs.existsSync(p)) {
-    p = path.join(dir, `strawverse-${stamp}-${i}.log`);
+    p = path.join(dir, `airbox-${stamp}-${i}.log`);
     i++;
   }
   return p;

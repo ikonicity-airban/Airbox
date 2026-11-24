@@ -267,7 +267,7 @@ const patchSnapBuilder = () => {
       ) {
         content = content.replace(
           'await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });',
-          '// Patched by StrawVerse to prevent race condition with AppImage packaging\n    // await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });',
+          '// Patched by Airbox to prevent race condition with AppImage packaging\n    // await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });',
         );
         fs.writeFileSync(snapLegacyPath, content, "utf8");
         console.log(

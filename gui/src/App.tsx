@@ -811,7 +811,7 @@ export default function App() {
           />
         );
       case "marketplace":
-        return <Marketplace initialType={current.params.type || "Anime"} />;
+        return <Marketplace initialType={current.params.type || "Movies"} />;
       default:
         return <div>View not implemented: {current.view}</div>;
     }

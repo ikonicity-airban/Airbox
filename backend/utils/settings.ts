@@ -11,20 +11,19 @@ const {
 } = require("./DirectoryMaker");
 const { logger, configureExternalLogs } = require("./AppLogger.js");
 
-// Log folder users can actually reach: shared StrawVerse/logs on
-// mobile, ~/StrawVerse/logs on desktop.
+// Log folder users can actually reach: shared Airbox/logs on
+// mobile, ~/Airbox/logs on desktop.
 function getEffectiveLogDir() {
-  if (
-    process.env.NODEJS_MOBILE_DATA_DIR &&
-    process.env.STRAWVERSE_PUBLIC_ROOT
-  ) {
+  const publicRoot =
+    process.env.AIRBOX_PUBLIC_ROOT || process.env.STRAWVERSE_PUBLIC_ROOT;
+  if (process.env.NODEJS_MOBILE_DATA_DIR && publicRoot) {
     try {
-      const dir = path.join(process.env.STRAWVERSE_PUBLIC_ROOT, "logs");
+      const dir = path.join(publicRoot, "logs");
       fs.mkdirSync(dir, { recursive: true });
       return dir;
     } catch (_) {}
   }
-  const { getExternalLogDir } = require("./AppLogger.js");
+  const { getExternalLogDir } = require("./AppLogger");
   return getExternalLogDir();
 }
 const { setKeyValue, queryAll, unwrapJson } = require("./db");
@@ -747,15 +746,15 @@ function validateExtensionSafety(code, repoOwner = "TheYogMehta") {
 }
 
 const DEFAULT_EXTENSION_REPO = {
-  id: "TheYogMehta/extensions",
-  owner: "TheYogMehta",
-  name: "extensions",
-  displayName: "Official Extensions",
-  url: "https://github.com/TheYogMehta/extensions",
+  id: "ikonicity-airban/strawverse-extensions",
+  owner: "ikonicity-airban",
+  name: "strawverse-extensions",
+  displayName: "Airbox Extensions",
+  url: "https://github.com/ikonicity-airban/strawverse-extensions",
   marketplaceUrl:
-    "https://raw.githubusercontent.com/TheYogMehta/extensions/refs/heads/main/marketplace.json",
+    "https://raw.githubusercontent.com/ikonicity-airban/strawverse-extensions/refs/heads/main/marketplace.json",
   rawBaseUrl:
-    "https://raw.githubusercontent.com/TheYogMehta/extensions/refs/heads/main",
+    "https://raw.githubusercontent.com/ikonicity-airban/strawverse-extensions/refs/heads/main",
   isDefault: true,
 };
 
@@ -785,8 +784,8 @@ function parseExtensionRepoUrl(inputUrl) {
       rawBaseUrl,
       marketplaceUrl: `${rawBaseUrl}/marketplace.json`,
       isDefault:
-        owner.toLowerCase() === "theyogmehta" &&
-        repoName.toLowerCase() === "extensions",
+        owner.toLowerCase() === "ikonicity-airban" &&
+        repoName.toLowerCase() === "strawverse-extensions",
     };
   }
 
@@ -808,8 +807,8 @@ function parseExtensionRepoUrl(inputUrl) {
       rawBaseUrl,
       marketplaceUrl: cleanUrl,
       isDefault:
-        owner.toLowerCase() === "theyogmehta" &&
-        repoName.toLowerCase() === "extensions",
+        owner.toLowerCase() === "ikonicity-airban" &&
+        repoName.toLowerCase() === "strawverse-extensions",
     };
   }
 
@@ -875,7 +874,21 @@ function getExtensionRepos() {
   };
 
   if (Array.isArray(config?.extension_repos)) {
-    return normalize(config.extension_repos);
+    let list = normalize(config.extension_repos);
+    // Migrate legacy default repository to the updated Airbox extension repository
+    list = list.map((r) => {
+      if (
+        r.id === "TheYogMehta/extensions" ||
+        (r.url && r.url.toLowerCase().includes("theyogmehta/extensions"))
+      ) {
+        return DEFAULT_EXTENSION_REPO;
+      }
+      return r;
+    });
+    if (!config?.default_repo_removed && !list.some((r) => r.isDefault || r.id === DEFAULT_EXTENSION_REPO.id)) {
+      list.unshift(DEFAULT_EXTENSION_REPO);
+    }
+    return list;
   }
 
   // Backward compatibility with config.custom_extension_repos
@@ -1075,7 +1088,7 @@ async function restoreDefaultExtensionRepo() {
   return { success: true, repos: updated };
 }
 
-async function fetchAggregatedMarketplace(activeType = "Anime") {
+async function fetchAggregatedMarketplace(activeType = "Movies") {
   const repos = getExtensionRepos();
   const aggregated = [];
   const norm = String(activeType || "").toLowerCase();

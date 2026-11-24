@@ -23,7 +23,7 @@ import java.util.Map;
 
 public class MainActivity extends BridgeActivity {
 
-    private static final String TAG = "StrawVerse";
+    private static final String TAG = "Airbox";
     private static final int SERVER_PORT = 9545;
     private android.app.AlertDialog permissionDialog;
 
@@ -78,7 +78,7 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> {
             android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(MainActivity.this);
             builder.setTitle("Storage Permission Required");
-            builder.setMessage("Strawverse requires All Files Access permission to store downloads, databases, and scrapers in public storage. Please grant this permission to continue.");
+            builder.setMessage("Airbox requires All Files Access permission to store downloads, databases, and scrapers in public storage. Please grant this permission to continue.");
             builder.setCancelable(false);
             builder.setPositiveButton("Grant Permission", (dialog, which) -> {
                 launchPermissionSettings();
@@ -95,10 +95,10 @@ public class MainActivity extends BridgeActivity {
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread thread, Throwable throwable) {
-                Log.e("StrawVerse", "FATAL JAVA CRASH on thread " + thread.getName(), throwable);
+                Log.e("Airbox", "FATAL JAVA CRASH on thread " + thread.getName(), throwable);
                 try {
                     java.io.File extStorage = android.os.Environment.getExternalStorageDirectory();
-                    java.io.File publicRoot = new java.io.File(extStorage, "Strawverse");
+                    java.io.File publicRoot = new java.io.File(extStorage, "Airbox");
                     java.io.File dataDir = new java.io.File(publicRoot, "data");
                     dataDir.mkdirs();
                     java.io.File logFile = new java.io.File(dataDir, "crash.log");
@@ -212,7 +212,7 @@ public class MainActivity extends BridgeActivity {
                 new Thread(() -> {
                     try {
                         java.io.File extStorage = android.os.Environment.getExternalStorageDirectory();
-                        java.io.File publicRoot = new java.io.File(extStorage, "Strawverse");
+                        java.io.File publicRoot = new java.io.File(extStorage, "Airbox");
                         
                         new java.io.File(publicRoot, "data").mkdirs();
                         java.io.File animeFolder = new java.io.File(publicRoot, "Anime");
@@ -222,6 +222,10 @@ public class MainActivity extends BridgeActivity {
                         java.io.File mangaFolder = new java.io.File(publicRoot, "Manga");
                         mangaFolder.mkdirs();
                         new java.io.File(mangaFolder, ".nomedia").createNewFile();
+
+                        java.io.File moviesFolder = new java.io.File(publicRoot, "Movies");
+                        moviesFolder.mkdirs();
+                        new java.io.File(moviesFolder, ".nomedia").createNewFile();
                         
                         java.io.File cacheFolder = new java.io.File(publicRoot, ".cache");
                         cacheFolder.mkdirs();
@@ -237,10 +241,13 @@ public class MainActivity extends BridgeActivity {
                         java.io.File scrapperManga = new java.io.File(scrapperRoot, "Manga");
                         scrapperManga.mkdirs();
 
+                        java.io.File scrapperMovies = new java.io.File(scrapperRoot, "Movies");
+                        scrapperMovies.mkdirs();
+
                         java.io.File scrapperIco = new java.io.File(scrapperRoot, "ico");
                         scrapperIco.mkdirs();
                         new java.io.File(scrapperIco, ".nomedia").createNewFile();
-                        Log.i(TAG, "Successfully pre-created Strawverse folders in public storage on resume");
+                        Log.i(TAG, "Successfully pre-created Airbox folders in public storage on resume");
                     } catch (Exception e) {
                         Log.e(TAG, "Failed to create public folders on resume: " + e.getMessage());
                     }
@@ -260,7 +267,9 @@ public class MainActivity extends BridgeActivity {
     private void handleDeepLink(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
         Uri uri = intent.getData();
-        if (uri == null || !"strawverse".equals(uri.getScheme())) return;
+        if (uri == null) return;
+        String scheme = uri.getScheme();
+        if (!"airbox".equals(scheme) && !"strawverse".equals(scheme)) return;
 
         String code = uri.getQueryParameter("code");
         if (code == null || code.isEmpty()) {

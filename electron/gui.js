@@ -135,7 +135,7 @@ app.on("second-instance", (event, commandLine) => {
   }
   const url = commandLine.find((arg) => {
     const cleanArg = arg.replace(/^['"]|['"]$/g, "");
-    return cleanArg.startsWith("strawverse://");
+    return cleanArg.startsWith("airbox://") || cleanArg.startsWith("strawverse://") || cleanArg.startsWith("iconmedia://");
   });
   logger.info("[Protocol] Found URL in second-instance args: " + url);
   if (url) {
@@ -163,15 +163,15 @@ try {
   } else {
     autoUpdater.setFeedURL({
       provider: "github",
-      owner: "TheYogMehta",
-      repo: "StrawVerse"
+      owner: "ikonicity-airban",
+      repo: "Airbox"
     });
   }
 } catch (err) {
   autoUpdater.setFeedURL({
     provider: "github",
-    owner: "TheYogMehta",
-    repo: "StrawVerse"
+    owner: "ikonicity-airban",
+    repo: "Airbox"
   });
 }
 const guiDistDir = fs.existsSync(path.join(__dirname, "gui", "dist")) ? path.join(__dirname, "gui", "dist") : path.join(__dirname, "..", "gui", "dist");
@@ -597,7 +597,7 @@ ${parts[1].trim()}`;
   if (process.platform === "darwin") {
     const template = [
       {
-        label: app.name || "StrawVerse",
+        label: app.name || "Airbox",
         submenu: [
           { role: "about" },
           { type: "separator" },
@@ -651,10 +651,10 @@ ${parts[1].trim()}`;
         role: "help",
         submenu: [
           {
-            label: "StrawVerse GitHub",
+            label: "Airbox GitHub",
             click: async () => {
               await shell.openExternal(
-                "https://github.com/TheYogMehta/StrawVerse"
+                "https://github.com/ikonicity-airban/Airbox"
               );
             }
           },
@@ -744,14 +744,18 @@ app.whenReady().then(async () => {
     }
   });
   registerLinuxProtocol();
+  app.setAsDefaultProtocolClient("airbox");
   app.setAsDefaultProtocolClient("strawverse");
   const urlArg = process.argv.find((arg) => {
     const cleanArg = arg.replace(/^['"]|['"]$/g, "");
-    return cleanArg.startsWith("strawverse://");
+    return cleanArg.startsWith("airbox://") || cleanArg.startsWith("strawverse://");
   });
   if (urlArg) {
     handleCustomProtocolUrl(urlArg);
   }
+  protocol.handle("airbox", async (request) => {
+    handleCustomProtocolUrl(request.url);
+  });
   protocol.handle("strawverse", async (request) => {
     handleCustomProtocolUrl(request.url);
   });
@@ -812,7 +816,7 @@ autoUpdater.on("error", (err) => {
     global.win.webContents.send("update-error", {
       message: isCodeSignError ? "Auto-update failed due to macOS code signature verification (unsigned build). Please download the latest DMG release from GitHub." : errMsg,
       isCodeSignError: Boolean(isCodeSignError),
-      releaseUrl: "https://github.com/TheYogMehta/StrawVerse/releases/latest"
+      releaseUrl: "https://github.com/ikonicity-airban/Airbox/releases/latest"
     });
   }
 });
@@ -964,7 +968,7 @@ function registerLinuxProtocol() {
     if (!fs.existsSync(desktopDir)) {
       fs.mkdirSync(desktopDir, { recursive: true });
     }
-    const desktopFilePath = path.join(desktopDir, "strawverse.desktop");
+    const desktopFilePath = path.join(desktopDir, "airbox.desktop");
     const execPath = process.env.APPIMAGE || process.execPath;
     const localIconDir = path.join(
       os.homedir(),
@@ -986,15 +990,15 @@ function registerLinuxProtocol() {
       }
     }
     const desktopContent = `[Desktop Entry]
-Name=iconmedia
+Name=Airbox
 Exec="${execPath}" --no-sandbox %U
 Terminal=false
 Type=Application
 Icon=${useIconName}
-StartupWMClass=iconmedia
+StartupWMClass=airbox
 X-AppImage-Version=${app.getVersion()}
-Comment=Universal Media Streaming and Batch Downloader
-MimeType=x-scheme-handler/iconmedia;
+Comment=Airbox - Modern Open Source Streaming and Batch Downloader Studio
+MimeType=x-scheme-handler/airbox;x-scheme-handler/strawverse;x-scheme-handler/iconmedia;
 Categories=Utility;
 `;
     let shouldWrite = true;
@@ -1009,13 +1013,13 @@ Categories=Utility;
       fs.chmodSync(desktopFilePath, "755");
       logger.info(`[Protocol] Registered desktop entry at ${desktopFilePath}`);
       exec(
-        `xdg-mime default strawverse.desktop x-scheme-handler/strawverse`,
+        `xdg-mime default airbox.desktop x-scheme-handler/airbox && xdg-mime default airbox.desktop x-scheme-handler/strawverse`,
         (error, stdout, stderr) => {
           if (error) {
             logger.error(`[Protocol] xdg-mime failed: ${error.message}`);
           } else {
             logger.info(
-              `[Protocol] Registered strawverse scheme handler via xdg-mime`
+              `[Protocol] Registered airbox scheme handler via xdg-mime`
             );
           }
         }

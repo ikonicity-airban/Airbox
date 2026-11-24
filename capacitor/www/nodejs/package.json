@@ -1,7 +1,7 @@
 {
-  "name": "strawverse-capacitor-backend",
-  "version": "12.1.0",
-  "description": "StrawVerse backend running embedded on Android via capacitor-nodejs",
+  "name": "airbox-capacitor-backend",
+  "version": "1.0.0",
+  "description": "Airbox backend running embedded on Android via capacitor-nodejs",
   "main": "main.bundle.js",
   "private": true,
   "license": "GPL-3.0-only",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# StrawVerse Installer Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/TheYogMehta/StrawVerse/main/install.sh | bash
+# Airbox Installer Script
+# Usage: curl -fsSL https://raw.githubusercontent.com/ikonicity-airban/Airbox/main/install.sh | bash
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ ok() { echo -e "${GREEN}  ✓${NC} $*"; }
 warn() { echo -e "${YELLOW}  ⚠${NC} $*"; }
 error() { echo -e "${RED}  ✗ $*${NC}" >&2; exit 1; }
 
-log "Starting StrawVerse installation..."
+log "Starting Airbox installation..."
 
 # Check dependencies
 for cmd in curl grep cut head chmod mkdir; do
@@ -30,7 +30,7 @@ done
 
 # Get latest release AppImage URL from GitHub API
 log "Fetching latest release information..."
-REPO="TheYogMehta/StrawVerse"
+REPO="ikonicity-airban/Airbox"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 RELEASE_JSON=$(curl -s "$API_URL")
@@ -46,13 +46,13 @@ if [ -z "$APPIMAGE_URL" ]; then
     error "Could not find an AppImage in the latest release ($VERSION)."
 fi
 
-log "Found StrawVerse version ${BOLD}${VERSION}${NC}"
+log "Found Airbox version ${BOLD}${VERSION}${NC}"
 
 # Directories
 BIN_DIR="${HOME}/.local/bin"
 ICON_DIR="${HOME}/.local/share/icons"
 MENU_DIR="${HOME}/.local/share/applications"
-APP_DIR="${HOME}/.local/share/strawverse"
+APP_DIR="${HOME}/.local/share/airbox"
 
 log "Creating directories..."
 mkdir -p "$BIN_DIR"
@@ -62,8 +62,8 @@ mkdir -p "$APP_DIR"
 ok "Directories created or verified."
 
 # Download AppImage
-TARGET_APPIMAGE="${APP_DIR}/StrawVerse.AppImage"
-log "Downloading StrawVerse AppImage from: ${CYAN}${APPIMAGE_URL}${NC}"
+TARGET_APPIMAGE="${APP_DIR}/Airbox.AppImage"
+log "Downloading Airbox AppImage from: ${CYAN}${APPIMAGE_URL}${NC}"
 if ! curl -L -# -o "$TARGET_APPIMAGE" "$APPIMAGE_URL"; then
     error "Failed to download AppImage."
 fi
@@ -78,7 +78,7 @@ if [[ "$TEST_RUN" == *"error loading libfuse.so.2"* ]] || [[ "$TEST_RUN" == *"re
     FUSE_COMPATIBLE=false
 fi
 
-TARGET_BIN="${BIN_DIR}/strawverse"
+TARGET_BIN="${BIN_DIR}/airbox"
 
 if [ "$FUSE_COMPATIBLE" = true ]; then
     log "System is FUSE compatible. Linking AppImage directly..."
@@ -106,8 +106,8 @@ else
 fi
 
 # Download Icon
-ICON_URL="https://raw.githubusercontent.com/${REPO}/main/electron/assets/luffy.png"
-TARGET_ICON="${ICON_DIR}/strawverse.png"
+ICON_URL="https://raw.githubusercontent.com/${REPO}/main/electron/assets/airbox.png"
+TARGET_ICON="${ICON_DIR}/airbox.png"
 log "Downloading application icon..."
 if curl -fsSL -o "$TARGET_ICON" "$ICON_URL"; then
     ok "Icon downloaded to: ${BOLD}${TARGET_ICON}${NC}"
@@ -116,18 +116,18 @@ else
 fi
 
 # Create desktop entry
-DESKTOP_FILE="${MENU_DIR}/strawverse.desktop"
+DESKTOP_FILE="${MENU_DIR}/airbox.desktop"
 log "Creating desktop entry at: ${BOLD}${DESKTOP_FILE}${NC}"
 cat <<EOF > "$DESKTOP_FILE"
 [Desktop Entry]
-Name=StrawVerse
+Name=Airbox
 Exec=${TARGET_BIN}
 Icon=${TARGET_ICON}
 Type=Application
-Categories=Multimedia;Video;
-Comment=Ridiculously efficient, fast and light-weight anime and manga manager.
+Categories=Multimedia;Video;Utility;
+Comment=Airbox - Modern Open Source Streaming and Batch Downloader Studio
 Terminal=false
-MimeType=x-scheme-handler/strawverse;
+MimeType=x-scheme-handler/airbox;x-scheme-handler/strawverse;
 EOF
 ok "Desktop entry created."
 
@@ -135,11 +135,11 @@ ok "Desktop entry created."
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
     warn "${BOLD}~/.local/bin${NC} is not in your current ${BOLD}PATH${NC}."
-    echo -e "To run StrawVerse from the terminal by typing ${CYAN}strawverse${NC}, please add it to your PATH."
+    echo -e "To run Airbox from the terminal by typing ${CYAN}airbox${NC}, please add it to your PATH."
     echo -e "You can do this by adding the following line to your shell configuration file (e.g., ${BOLD}~/.bashrc${NC} or ${BOLD}~/.zshrc${NC}):"
     echo -e "  ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
     echo ""
 fi
 
-log "${GREEN}${BOLD}StrawVerse installation completed successfully!${NC}"
-log "You can now run StrawVerse from your applications menu or by executing ${CYAN}strawverse${NC} in the terminal."
+log "${GREEN}${BOLD}Airbox installation completed successfully!${NC}"
+log "You can now run Airbox from your applications menu or by executing ${CYAN}airbox${NC} in the terminal."

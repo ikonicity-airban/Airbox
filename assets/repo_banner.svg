@@ -107,7 +107,7 @@
 
     <!-- Main Title -->
     <g filter="url(#repo-glow)">
-      <text x="600" y="140" fill="url(#repo-title-grad)" class="hero-title">StrawVerse</text>
+      <text x="600" y="140" fill="url(#repo-title-grad)" class="hero-title">Airbox</text>
     </g>
 
     <!-- Tagline -->

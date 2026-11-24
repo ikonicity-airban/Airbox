@@ -181,18 +181,32 @@ function applyDefaultPaths() {
     base = path.resolve(__dirname, "..", "..");
   }
 
-  if (!process.env.STRAWVERSE_DATA_DIR) {
-    process.env.STRAWVERSE_DATA_DIR = path.join(base, "userData");
-  }
-  if (!process.env.STRAWVERSE_DOWNLOADS_DIR) {
-    process.env.STRAWVERSE_DOWNLOADS_DIR = path.join(base, "Downloads");
-  }
-  if (!process.env.STRAWVERSE_TEMP_DIR) {
-    process.env.STRAWVERSE_TEMP_DIR = os.tmpdir() || path.join(base, "tmp");
-  }
-  if (!process.env.STRAWVERSE_APP_VERSION) {
-    process.env.STRAWVERSE_APP_VERSION = readOwnVersion();
-  }
+  const dataDir =
+    process.env.AIRBOX_DATA_DIR ||
+    process.env.STRAWVERSE_DATA_DIR ||
+    path.join(base, "userData");
+  const downloadsDir =
+    process.env.AIRBOX_DOWNLOADS_DIR ||
+    process.env.STRAWVERSE_DOWNLOADS_DIR ||
+    path.join(base, "Downloads");
+  const tempDir =
+    process.env.AIRBOX_TEMP_DIR ||
+    process.env.STRAWVERSE_TEMP_DIR ||
+    os.tmpdir() ||
+    path.join(base, "tmp");
+  const appVer =
+    process.env.AIRBOX_APP_VERSION ||
+    process.env.STRAWVERSE_APP_VERSION ||
+    readOwnVersion();
+
+  process.env.AIRBOX_DATA_DIR = dataDir;
+  process.env.STRAWVERSE_DATA_DIR = dataDir;
+  process.env.AIRBOX_DOWNLOADS_DIR = downloadsDir;
+  process.env.STRAWVERSE_DOWNLOADS_DIR = downloadsDir;
+  process.env.AIRBOX_TEMP_DIR = tempDir;
+  process.env.STRAWVERSE_TEMP_DIR = tempDir;
+  process.env.AIRBOX_APP_VERSION = appVer;
+  process.env.STRAWVERSE_APP_VERSION = appVer;
 
   const defaultDownloads = path.join(base, "Downloads");
   try {
@@ -200,8 +214,8 @@ function applyDefaultPaths() {
   } catch (_) {}
 
   try {
-    fs.mkdirSync(process.env.STRAWVERSE_DATA_DIR, { recursive: true });
-    fs.mkdirSync(process.env.STRAWVERSE_DOWNLOADS_DIR, { recursive: true });
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(downloadsDir, { recursive: true });
   } catch (_) {}
 }
 
@@ -260,7 +274,7 @@ async function boot() {
 
   const { logger } = require("../../../backend/utils/AppLogger");
   logger.info(
-    "[android] Booting StrawVerse backend (sqlite backend: native Java bridge)",
+    "[android] Booting Airbox backend (sqlite backend: native Java bridge)",
   );
 
   const { initDatabase, run } = require("../../../backend/utils/db");
@@ -879,13 +893,16 @@ async function boot() {
   router.get("/api/update/check", async (req, res) => {
     try {
       const currentVersion =
-        process.env.STRAWVERSE_APP_VERSION || readOwnVersion() || "1.0.0";
+        process.env.AIRBOX_APP_VERSION ||
+        process.env.STRAWVERSE_APP_VERSION ||
+        readOwnVersion() ||
+        "1.0.0";
 
       const response = await axios.get(
-        "https://api.github.com/repos/TheYogMehta/StrawVerse/releases/latest",
+        "https://api.github.com/repos/ikonicity-airban/Airbox/releases/latest",
         {
           headers: {
-            "User-Agent": "StrawVerse-App",
+            "User-Agent": "Airbox-App",
             Accept: "application/vnd.github.v3+json",
           },
           timeout: 10000,
@@ -900,7 +917,7 @@ async function boot() {
       );
       const downloadUrl =
         apkAsset?.browser_download_url ||
-        `https://github.com/TheYogMehta/StrawVerse/releases/download/${release.tag_name}/StrawVerse-${latestVersion}.apk`;
+        `https://github.com/ikonicity-airban/Airbox/releases/download/${release.tag_name}/Airbox-${latestVersion}.apk`;
 
       latestUpdateInfo = {
         version: latestVersion,
@@ -976,7 +993,7 @@ async function boot() {
 
     isDownloadingUpdate = true;
     try {
-      const targetPath = path.join(os.homedir(), "StrawVerse-update.apk");
+      const targetPath = path.join(os.homedir(), "Airbox-update.apk");
       if (!fs.existsSync(path.dirname(targetPath))) {
         fs.mkdirSync(path.dirname(targetPath), { recursive: true });
       }
@@ -991,7 +1008,7 @@ async function boot() {
         url: downloadUrl,
         responseType: "stream",
         headers: {
-          "User-Agent": "StrawVerse-App",
+          "User-Agent": "Airbox-App",
         },
         maxRedirects: 5,
       });
@@ -1082,7 +1099,9 @@ async function boot() {
     let apkPath = req.body?.args?.[0] || req.body?.path || downloadedApkPath;
 
     if (!apkPath || !fs.existsSync(apkPath)) {
-      const targetDir = "/storage/emulated/0/Strawverse/apk";
+      const targetDir = fs.existsSync("/storage/emulated/0/Airbox/apk")
+        ? "/storage/emulated/0/Airbox/apk"
+        : "/storage/emulated/0/Strawverse/apk";
       if (fs.existsSync(targetDir)) {
         const apks = fs
           .readdirSync(targetDir)

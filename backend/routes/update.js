@@ -28,7 +28,7 @@ function isNewerVersion(currentVersion, latestVersion) {
   return false;
 }
 function getApkStorageDir() {
-  let targetDir = "/storage/emulated/0/Strawverse/apk";
+  let targetDir = "/storage/emulated/0/Airbox/apk";
   if (!fs.existsSync(targetDir)) {
     try {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -78,7 +78,7 @@ async function checkForUpdateLogic() {
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
       {
         headers: {
-          "User-Agent": `StrawVerse-Android/${currentVersion}`,
+          "User-Agent": `Airbox-Android/${currentVersion}`,
           Accept: "application/vnd.github.v3+json"
         },
         timeout: 15e3
@@ -98,7 +98,7 @@ async function checkForUpdateLogic() {
       downloadUrl: apkAsset ? apkAsset.browser_download_url : null,
       releaseNotes: data.body || "",
       releaseUrl: data.html_url || "",
-      apkName: apkAsset ? apkAsset.name : `StrawVerse_v${latestVersion}.apk`
+      apkName: apkAsset ? apkAsset.name : `Airbox_v${latestVersion}.apk`
     };
     if (!updateAvailable) {
       cleanupOldApks(currentVersion);
@@ -160,7 +160,7 @@ router.post("/api/update/download", async (req, res) => {
   logger.info(`[AutoUpdater] Starting download from: ${downloadUrl}`);
   try {
     const targetDir = getApkStorageDir();
-    const apkFileName = cachedUpdateInfo.apkName || "StrawVerse.apk";
+    const apkFileName = cachedUpdateInfo.apkName || "Airbox.apk";
     const apkPath = path.join(targetDir, apkFileName);
     const writer = fs.createWriteStream(apkPath);
     const response = await axios({
@@ -168,7 +168,7 @@ router.post("/api/update/download", async (req, res) => {
       method: "GET",
       responseType: "stream",
       headers: {
-        "User-Agent": `StrawVerse-Android/${cachedUpdateInfo.currentVersion}`
+        "User-Agent": `Airbox-Android/${cachedUpdateInfo.currentVersion}`
       },
       timeout: 6e4
     });

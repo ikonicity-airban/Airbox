@@ -33,9 +33,9 @@ function isNewerVersion(currentVersion, latestVersion) {
   return false;
 }
 
-// Helper to get /Strawverse/apk target directory
+// Helper to get /Airbox/apk target directory
 function getApkStorageDir() {
-  let targetDir = "/storage/emulated/0/Strawverse/apk";
+  let targetDir = "/storage/emulated/0/Airbox/apk";
   if (!fs.existsSync(targetDir)) {
     try {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -47,7 +47,7 @@ function getApkStorageDir() {
   return targetDir;
 }
 
-// Clean up older or same version APK files from /Strawverse/apk directory
+// Clean up older or same version APK files from /Airbox/apk directory
 function cleanupOldApks(currentVersion) {
   try {
     const dir = getApkStorageDir();
@@ -93,7 +93,7 @@ async function checkForUpdateLogic() {
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
       {
         headers: {
-          "User-Agent": `StrawVerse-Android/${currentVersion}`,
+          "User-Agent": `Airbox-Android/${currentVersion}`,
           Accept: "application/vnd.github.v3+json",
         },
         timeout: 15000,
@@ -121,7 +121,7 @@ async function checkForUpdateLogic() {
       downloadUrl: apkAsset ? apkAsset.browser_download_url : null,
       releaseNotes: data.body || "",
       releaseUrl: data.html_url || "",
-      apkName: apkAsset ? apkAsset.name : `StrawVerse_v${latestVersion}.apk`,
+      apkName: apkAsset ? apkAsset.name : `Airbox_v${latestVersion}.apk`,
     };
 
     if (!updateAvailable) {
@@ -193,7 +193,7 @@ router.post("/api/update/download", async (req, res) => {
 
   try {
     const targetDir = getApkStorageDir();
-    const apkFileName = cachedUpdateInfo.apkName || "StrawVerse.apk";
+    const apkFileName = cachedUpdateInfo.apkName || "Airbox.apk";
     const apkPath = path.join(targetDir, apkFileName);
     const writer = fs.createWriteStream(apkPath);
 
@@ -202,7 +202,7 @@ router.post("/api/update/download", async (req, res) => {
       method: "GET",
       responseType: "stream",
       headers: {
-        "User-Agent": `StrawVerse-Android/${cachedUpdateInfo.currentVersion}`,
+        "User-Agent": `Airbox-Android/${cachedUpdateInfo.currentVersion}`,
       },
       timeout: 60000,
     });

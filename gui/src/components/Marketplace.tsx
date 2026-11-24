@@ -18,7 +18,7 @@ import Dropdown from "./common/Dropdown";
 import "./css/Marketplace.css";
 
 export default function Marketplace({ initialType }) {
-  const [activeType, setActiveType] = useState(initialType || "Anime");
+  const [activeType, setActiveType] = useState(initialType || "Movies");
   const [extensions, setExtensions] = useState([]);
   const [repos, setRepos] = useState([]);
   const [selectedRepoFilter, setSelectedRepoFilter] = useState("all");
@@ -434,7 +434,7 @@ export default function Marketplace({ initialType }) {
         </p>
       `,
       input: "url",
-      inputPlaceholder: "https://github.com/username/my-strawverse-extensions",
+      inputPlaceholder: "https://github.com/username/my-airbox-extensions",
       showCancelButton: true,
       confirmButtonText: "Add Repository",
       confirmButtonColor: "var(--accent)",
@@ -545,7 +545,7 @@ export default function Marketplace({ initialType }) {
       if (res && res.success) {
         swalSuccess(
           "Official Repository Restored",
-          "Official StrawVerse extensions repository has been added back.",
+          "Official Airbox extensions repository has been added back.",
         );
         fetchMarketplace();
       }
@@ -951,7 +951,7 @@ export default function Marketplace({ initialType }) {
                   onClick={handleRestoreDefaultRepository}
                   className="btn-header-action"
                   style={{ borderRadius: 8 }}
-                  title="Add back the official StrawVerse extensions repository"
+                  title="Add back the official Airbox extensions repository"
                 >
                   <RotateCcw size={14} />
                   <span>Restore Official Repo</span>

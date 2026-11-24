@@ -353,7 +353,7 @@ function getMalStatusLabel(status) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const GITHUB_REPO = "TheYogMehta/StrawVerse";
+const GITHUB_REPO = "ikonicity-airban/Airbox";
 const DISCORD_CLIENT_ID = "1372260492982358016";
 const DISCORD_IDLE_MESSAGES = Object.freeze([
   "Taking a quick snack break 🍕",
@@ -384,7 +384,11 @@ function getCurrentAppVersion() {
     if (pkg && pkg.version) return pkg.version;
   } catch (_) {}
 
-  return process.env.STRAWVERSE_APP_VERSION || "10.1.2";
+  return (
+    process.env.AIRBOX_APP_VERSION ||
+    process.env.STRAWVERSE_APP_VERSION ||
+    "1.0.0"
+  );
 }
 
 function sortSourcesByPreferredQuality(sources, preferredQuality = "highest") {

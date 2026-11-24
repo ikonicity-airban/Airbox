@@ -292,7 +292,7 @@ async function migrateDatabaseBase64Images() {
         if (buffer) {
           const imageUrl =
             row.image_url ||
-            `https://strawverse.internal/fallback-image/${type}/${row.id}`;
+            `https://airbox.internal/fallback-image/${type}/${row.id}`;
 
           await cacheImage(imageUrl, buffer);
           await run(
